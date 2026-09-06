@@ -1,0 +1,10 @@
+seleniumbase==4.53.7
+trafilatura==2.2.0
+anthropic==1.4.0
+python-dotenv==1.2.3
+mysql-connector-python==26.7.0
+beautifulsoup4==4.15.0
+python-dateutil==2.9.0.post0
+unidecode==1.4.0
+html2text==2025.4.15
+pytest==9.1.1

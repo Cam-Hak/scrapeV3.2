@@ -1,0 +1,7 @@
+.env
+.venv/
+__pycache__/
+.pytest_cache/
+
+# production dumps, local only -- db/press_releases.sql is the schema and is kept
+db/*.dmp.sql

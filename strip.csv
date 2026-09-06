@@ -1,0 +1,7 @@
+# a_id,body,title -- one line per site, a_id of * applies to every site
+# body: drop any article line containing the text. title: cut the text out of the headline
+# separate several patterns in one column with ~
+34684,Background:,
+28015,press@eqca.org,
+29288,Faculty of Arts and HumanitiesJakobi,
+27311,,STATEMENT RELEASE: 
