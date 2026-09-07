@@ -1,31 +1,37 @@
-from scraper.browser import Browser, GROW_TRIES, grown
+from scraper.browser import Browser, SETTLE_POLLS, settled, wait_for
 
 
-def pages(*sizes):
-    return ["x" * n for n in sizes]
-
-
-def test_waits_while_the_page_is_still_rendering():
-    reads = iter(pages(76, 244, 248, 255, 255))
+def test_returns_once_the_size_holds_still():
+    reads = iter([100, 100, 100, 100])
     naps = []
-    html = grown(lambda: next(reads), naps.append)
-    assert len(html) == 255
-    assert len(naps) == 4
+    settled(lambda: next(reads), naps.append)
+    assert len(naps) == 3
 
 
-def test_returns_as_soon_as_the_page_stops_growing():
-    reads = iter(pages(100, 100))
+def test_keeps_waiting_while_the_page_is_still_growing():
+    reads = iter([76, 244, 248, 255, 255, 255, 255])
     naps = []
-    html = grown(lambda: next(reads), naps.append)
-    assert len(html) == 100
-    assert len(naps) == 1
+    settled(lambda: next(reads), naps.append)
+    assert len(naps) == 6
 
 
-def test_gives_up_once_the_page_keeps_growing():
-    sizes = iter(range(100, 300))
+def test_gives_up_once_the_page_never_stops_growing():
+    sizes = iter(range(100, 500))
     naps = []
-    grown(lambda: "x" * next(sizes), naps.append)
-    assert len(naps) == GROW_TRIES
+    settled(lambda: next(sizes), naps.append)
+    assert len(naps) == SETTLE_POLLS
+
+
+def test_no_wait_before_the_first_request():
+    assert wait_for(None, 1000.0, 2) == 0
+
+
+def test_a_slow_fetch_pays_no_extra_delay():
+    assert wait_for(1000.0, 1009.0, 2) == 0
+
+
+def test_a_fast_fetch_waits_out_the_remainder():
+    assert wait_for(1000.0, 1000.5, 2) == 1.5
 
 
 class FlakySb:
@@ -41,6 +47,9 @@ class FlakySb:
 
     def sleep(self, secs):
         pass
+
+    def evaluate(self, script):
+        return 12
 
     def get_html(self):
         return "<html>ok</html>"

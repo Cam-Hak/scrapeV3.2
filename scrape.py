@@ -31,7 +31,6 @@ def scrape_site(browser, conn, a_id, url, recipe, cutoff, lede, drop, drop_title
     for i, row in enumerate(rows, 1):
         link = row["url"]
         tag = "  [%d/%d]" % (i, len(rows))
-        time.sleep(config.REQUEST_DELAY)
         item = extract(browser.get(link), recipe, drop, link, row, drop_title)
         if not item:
             log("%s no headline, date or body -- skipped" % tag)
