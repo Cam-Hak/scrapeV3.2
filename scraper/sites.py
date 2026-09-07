@@ -1,4 +1,5 @@
 import csv
+from urllib.parse import urlparse
 
 
 def load_sites(path, only=None, start=None, limit=None, last=None):
@@ -14,3 +15,10 @@ def load_sites(path, only=None, start=None, limit=None, last=None):
     if limit:
         rows = rows[:limit]
     return rows
+
+
+def by_host(sites):
+    groups = {}
+    for site in sites:
+        groups.setdefault(urlparse(site[1]).netloc, []).append(site)
+    return list(groups.values())
