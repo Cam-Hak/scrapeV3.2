@@ -456,21 +456,29 @@ A worker thread cannot print as it goes — six of them interleaved turns the pe
 - Consumes: nothing from Task 6.
 - Produces: `Result`, a `namedtuple` with fields `a_id found parsed stored dupes problems error lines`, and `run_site(browser, conn, a_id, url, recipe, cutoff, lede, drop, drop_title)` returning one. On success `error` is `None`; on failure `error` is a string and the count fields are all `0`. `lines` is a list of strings for the caller to print. Also `absorb(r, store, report)`, returning `None`. Task 8 calls `run_site` from worker threads and `absorb` from the main thread.
 
-- [ ] **Step 1: Make `scrape_site` collect its lines instead of printing**
+- [ ] **Step 1: Create `lines` in `run_site` and pass it to `scrape_site`**
 
-In `scrape.py`, inside `scrape_site`, replace every `log(...)` call with `lines.append(...)`, keeping the format strings exactly as they are. Add the accumulator as the first statement of the function body, seeded with the lede warning so it stays with its site's block:
+In `scrape.py`, change `scrape_site` to accept `lines` as a parameter and mutate it instead of returning it. Replace every `log(...)` call inside `scrape_site` with `lines.append(...)`, keeping the format strings exactly as they are.
 
-```python
-    lines = [] if lede else ["  no lede -- the body will open with TKTK placeholders"]
-```
-
-Change the return to:
+Change the signature from:
 
 ```python
-    return len(rows), extracted, stored, duplicates, problems, lines
+def scrape_site(browser, conn, a_id, url, recipe, cutoff, lede, drop, drop_title):
 ```
 
-Leave the module-level `log` function alone — the main loop still uses it.
+to:
+
+```python
+def scrape_site(browser, conn, a_id, url, recipe, cutoff, lede, drop, drop_title, lines):
+```
+
+and change the return to:
+
+```python
+    return len(rows), extracted, stored, duplicates, problems
+```
+
+Creating `lines` in `run_site` instead of `scrape_site` means that if an exception occurs during scraping, the lines accumulated before the exception are not lost.
 
 - [ ] **Step 2: Add the result type and the wrapper**
 
@@ -484,12 +492,13 @@ def run_site(browser, conn, a_id, url, recipe, cutoff, lede, drop, drop_title):
     log("  -> %s %s" % (a_id, url))  # one interleaved line so a long run shows what is in flight
     begun = time.time()
     head = ["", "%s %s" % (a_id, url)]
+    lines = [] if lede else ["  no lede -- the body will open with TKTK placeholders"]
     try:
-        found, parsed, stored, dupes, problems, lines = scrape_site(
-            browser, conn, a_id, url, recipe, cutoff, lede, drop, drop_title)
+        found, parsed, stored, dupes, problems = scrape_site(
+            browser, conn, a_id, url, recipe, cutoff, lede, drop, drop_title, lines)
     except Exception as e:
         why = "%s: %s" % (type(e).__name__, e)
-        return Result(a_id, 0, 0, 0, 0, [], why, head + ["  ERROR " + why])
+        return Result(a_id, 0, 0, 0, 0, [], why, head + lines + ["  ERROR " + why])
     lines.append("  %s done in %ds -- found=%s parsed=%s stored=%s dupes=%s"
                  % (a_id, time.time() - begun, found, parsed, stored, dupes))
     return Result(a_id, found, parsed, stored, dupes, problems, None, head + lines)
