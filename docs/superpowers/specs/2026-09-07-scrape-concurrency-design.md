@@ -51,14 +51,31 @@ every 300ms. Pull the full HTML once, after the size has settled.
 
 ### Challenge wait
 
-Unchanged. `_past_challenge()` is already conditional, so it only costs time on
-sites that actually challenge.
+`_past_challenge()` itself is unchanged. It is already conditional, so it only
+costs time on sites that actually challenge.
+
+Its ordering does change, and getting this wrong silently breaks Cloudflare
+sites. Today `SETTLE` runs first so there is a rendered page for the challenge
+check to look at. With the fixed sleep gone, a challenge check running
+immediately after `open()` could read a still-blank page, miss the marker and
+return, leaving the settle poll to settle happily on the interstitial.
+
+The order becomes: open, settle poll, challenge check, and if the check actually
+cleared a challenge, settle poll a second time on the real page. Challenged
+sites pay two poll passes, everything else pays one. The alternative, teaching
+the poll loop to treat the challenge marker as unsettled, needs the full HTML on
+every poll and gives back the saving the integer poll was there to get.
 
 ### Request delay
 
 Changes from "sleep 2, then fetch" to "ensure 2s has elapsed since the previous
-request to this host began". Same politeness, but it usually costs nothing
-because the fetch already took longer than two seconds.
+request began". Same politeness, but it usually costs nothing because the fetch
+already took longer than two seconds.
+
+The timestamp lives on the `Browser` instance. That makes it per-host for free
+once phase 2 lands, because a worker owns one browser and handles one site at a
+time, so consecutive requests through a given browser always go to the same
+host. No shared clock and no cross-worker coordination.
 
 ### Verification
 
