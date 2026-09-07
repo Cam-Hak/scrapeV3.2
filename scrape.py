@@ -127,8 +127,8 @@ def main():
                 report.problem(a_id, "found=%s parsed=0" % found)
             for problem in problems:
                 report.problem(a_id, problem)
-            log("  done in %ds -- found=%s parsed=%s stored=%s dupes=%s"
-                % (time.time() - begun, found, extracted, stored, dupes))
+            log("  %s done in %ds -- found=%s parsed=%s stored=%s dupes=%s"
+                % (a_id, time.time() - begun, found, extracted, stored, dupes))
 
     conn.close()
     store.close()
