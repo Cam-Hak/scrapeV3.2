@@ -45,12 +45,17 @@ def test_an_errored_result_records_failure_and_reports_the_error():
     assert report.sites == []
 
 
-def test_a_healthy_result_records_success_and_reports_the_site():
+def test_a_healthy_result_records_success_and_reports_the_site(monkeypatch, capsys):
     store, report = FakeStore(), FakeReport()
-    absorb(result(), store, report)
+    real_print = print
+    calls = []
+    monkeypatch.setattr("builtins.print", lambda *a, **k: (calls.append(a), real_print(*a, **k)))
+    absorb(result(lines=["  -> line one", "  -> line two"]), store, report)
     assert store.results == [(101, True)]
     assert report.sites == [(101, 6, 5, 3, 2)]
     assert report.problems == []
+    assert len(calls) == 1  # the whole block is one write, not one print per line
+    assert capsys.readouterr().out == "  -> line one\n  -> line two\n"
 
 
 def test_links_found_but_nothing_parsed_records_failure_and_reports_the_problem():

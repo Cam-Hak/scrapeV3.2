@@ -102,8 +102,7 @@ def absorb(r, store, report):
             report.problem(r.a_id, "found=%s parsed=0" % r.found)
         for problem in r.problems:
             report.problem(r.a_id, problem)
-    for line in r.lines:
-        log(line)
+    log("\n".join(r.lines))
 
 
 def worker(jobs, results):
