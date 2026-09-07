@@ -168,10 +168,10 @@ Estimates read from the sleep budget in the code, not measured.
 
 ## To verify before implementing
 
-- Whether `sb_cdp.Chrome` exposes an `evaluate()` for the size poll. If it does
-  not, the fallback is polling `get_html()` on a longer interval, which still
-  wins but by less.
-- Whether `xvfb-run` works with `sb_cdp` on the target server.
+- ~~Whether `sb_cdp.Chrome` exposes an `evaluate()` for the size poll.~~
+  Confirmed present against the installed SeleniumBase 4.53.7 on 2026-09-07.
+  The integer poll is viable and no fallback is needed.
+- Whether `xvfb-run` works with `sb_cdp` on the target server. Still open.
 
 ## Not in scope
 
