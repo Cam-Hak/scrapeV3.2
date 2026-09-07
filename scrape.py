@@ -18,7 +18,7 @@ from scraper.store import Store
 
 
 def log(msg):
-    print(msg, flush=True)
+    print(msg + "\n", end="", flush=True)  # one write so threads can't interleave inside a line
 
 
 def scrape_site(browser, conn, a_id, url, recipe, cutoff, lede, drop, drop_title, lines):
@@ -124,6 +124,16 @@ def worker(jobs, results):
         log("worker stopped: %s: %s" % (type(e).__name__, e))
 
 
+def drain(threads, results, store, report):
+    # a worker that dies must not hang the drain, so watch the threads rather than a count
+    while any(t.is_alive() for t in threads) or not results.empty():
+        try:
+            r = results.get(timeout=0.5)
+        except queue.Empty:
+            continue
+        absorb(r, store, report)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--days", type=int, default=config.DEFAULT_DAYS)
@@ -174,16 +184,19 @@ def main():
 
     results = queue.Queue()
     threads = [threading.Thread(target=worker, args=(jobs, results))
-               for _ in range(args.workers)]
+               for _ in range(max(1, args.workers))]
     for t in threads:
         t.start()
-    # a worker that dies must not hang the drain, so watch the threads rather than a count
-    while any(t.is_alive() for t in threads) or not results.empty():
-        try:
-            r = results.get(timeout=0.5)
-        except queue.Empty:
-            continue
-        absorb(r, store, report)
+    try:
+        drain(threads, results, store, report)
+    except KeyboardInterrupt:
+        log("interrupted -- letting workers finish their current group, then stopping")
+        while True:
+            try:
+                jobs.get_nowait()
+            except queue.Empty:
+                break
+        drain(threads, results, store, report)
     for t in threads:
         t.join()
 

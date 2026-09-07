@@ -1,6 +1,9 @@
+import queue
+import threading
+import time
 from datetime import date
 
-from scrape import Result, absorb, run_site
+from scrape import Result, absorb, drain, run_site
 from scraper.recipe import Recipe
 
 
@@ -100,3 +103,31 @@ def test_run_site_keeps_lines_from_before_a_mid_site_exception():
     assert any("no lede" in line for line in r.lines)
     assert any("listing -> 1 links" in line for line in r.lines)
     assert any("ERROR" in line for line in r.lines)
+
+
+def test_drain_absorbs_every_result_and_returns_without_hanging():
+    results = queue.Queue()
+
+    def puts_immediately():
+        results.put(result(a_id=1))
+
+    def puts_after_a_delay():
+        time.sleep(0.2)
+        results.put(result(a_id=2))
+
+    def puts_nothing():
+        pass
+
+    threads = [threading.Thread(target=puts_immediately),
+               threading.Thread(target=puts_after_a_delay),
+               threading.Thread(target=puts_nothing)]
+    for t in threads:
+        t.start()
+
+    store, report = FakeStore(), FakeReport()
+    drainer = threading.Thread(target=drain, args=(threads, results, store, report), daemon=True)
+    drainer.start()
+    drainer.join(timeout=5)
+
+    assert not drainer.is_alive()  # a hang would leave the drainer thread still running
+    assert {a_id for a_id, ok in store.results} == {1, 2}
