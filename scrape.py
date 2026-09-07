@@ -124,11 +124,12 @@ def worker(jobs, results):
 
 
 def stop(jobs):
+    dropped = []
     while True:
         try:
-            jobs.get_nowait()
+            dropped.extend(jobs.get_nowait())
         except queue.Empty:
-            return
+            return dropped
 
 
 def drain(threads, results, store, report):
@@ -194,11 +195,13 @@ def main():
                for _ in range(max(1, args.workers))]
     for t in threads:
         t.start()
+        time.sleep(1)  # Chrome launch is the one thing several workers must not do at once
     try:
         drain(threads, results, store, report)
     except KeyboardInterrupt:
         log("interrupted -- letting workers finish their current group, then stopping")
-        stop(jobs)
+        for job in stop(jobs):
+            report.skip(job[0], "not run -- interrupted")
         drain(threads, results, store, report)
     finally:
         stop(jobs)
