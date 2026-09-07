@@ -22,11 +22,42 @@ python scrape.py
 # to run site implementation agent
 python build_recipes.py
 ```
-- --days n
-- --id xx
-- --last x (gathers last x sites in the csv)
-- --force (re runs recipe creation)
-- --workers n (sites in parallel, default 4; use 1 to run one at a time)
+
+### Picking sites
+Both scripts take the same four selectors, read against `test-sites.csv`.
+
+| Flag | Effect |
+|---|---|
+| `--id 18092 20260` | Only those site ids. Space-separated, any number of them. |
+| `--from 20260` | Start at that id, run to the end of the file |
+| `--last 10` | The last 10 rows |
+| `--limit 5` | The first 5 rows |
+
+`--from`, `--last` and `--limit` combine, applied in that order, so
+`--from 20260 --limit 3` means three sites starting at 20260.
+
+`--id` does not combine. It returns its matches immediately and ignores the other
+three, so `--id 18092 --limit 5` silently runs one site.
+
+### scrape.py only
+
+| Flag | Effect |
+|---|---|
+| `--days n` | Keep articles from the last n days (default 3) |
+| `--workers n` | Sites in parallel (default 4). Use 1 to run one at a time. |
+| `--retry-failed` | Clear the failure streaks first, so sites benched after 3 bad runs are tried again |
+
+Sites are grouped by host, so two entries on one host never run at the same time
+no matter how many workers you give it.
+
+Ctrl-C stops a run. Workers finish the site they are on rather than abandoning it
+half-written, so it can take a minute; you still get the summary.
+
+### build_recipes.py only
+
+| Flag | Effect |
+|---|---|
+| `--force` | Rebuild recipes that already exist, instead of skipping them |
 
 ## Running on a Linux server
 
