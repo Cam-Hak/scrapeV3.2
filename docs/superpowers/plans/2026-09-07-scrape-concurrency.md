@@ -17,7 +17,7 @@
 - Delete dead code rather than commenting it out. `grown` and `GROW_TRIES` go away entirely.
 - Do not reformat lines you did not change.
 - Articles within one site stay sequential. Only different hosts run concurrently.
-- `--workers 1` must behave exactly like today: one browser, list order, same output.
+- `--workers 1` must behave exactly like today: one browser, same per-site blocks in list order for sites that run. Skip messages (no recipe, marked failed) now print during job-building, ahead of any worker, instead of interleaved in list order.
 - Phase 2 does not start until the Task 5 gate passes.
 
 **Deviation from the spec, deliberate:** the spec named `ThreadPoolExecutor` plus `threading.local()`. This plan uses plain `threading.Thread` workers pulling from a `queue.Queue` instead. Same semantics — one browser and one connection per worker, alive for the whole run — but each worker creates its resources as ordinary locals at the top of its function, so there is no thread-local storage, no registry of created browsers and no hand-written lock. Fewer moving parts for an identical result.
@@ -688,7 +688,7 @@ Expected: PASS.
 python scrape.py --limit 3 --workers 1
 ```
 
-Expected: identical output to Task 7 Step 5 — one browser, list order, same blocks.
+Expected: same output as Task 7 Step 5 for sites that run — one browser, list order, same blocks — except skip messages (no recipe, marked failed) now print ahead of them during job-building rather than interleaved in list order.
 
 - [ ] **Step 6: Verify several workers**
 
