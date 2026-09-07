@@ -19,8 +19,7 @@ def log(msg):
     print(msg, flush=True)
 
 
-def scrape_site(browser, conn, a_id, url, recipe, cutoff, lede, drop, drop_title):
-    lines = [] if lede else ["  no lede -- the body will open with TKTK placeholders"]
+def scrape_site(browser, conn, a_id, url, recipe, cutoff, lede, drop, drop_title, lines):
     listing = browser.get(url)
     # the site's date habit is re-read every run, so a stale flag cannot outlive one
     if recipe.date_on_listing and set_dayfirst(recipe, [BeautifulSoup(listing, "html.parser")]):
@@ -66,7 +65,7 @@ def scrape_site(browser, conn, a_id, url, recipe, cutoff, lede, drop, drop_title
         previous = _norm(item["headline"])
     if repeated:
         problems.append("%d repeated headline(s) -- selector may be a banner" % repeated)
-    return len(rows), extracted, stored, duplicates, problems, lines
+    return len(rows), extracted, stored, duplicates, problems
 
 
 Result = namedtuple("Result", "a_id found parsed stored dupes problems error lines")
@@ -76,12 +75,13 @@ def run_site(browser, conn, a_id, url, recipe, cutoff, lede, drop, drop_title):
     log("  -> %s %s" % (a_id, url))  # one interleaved line so a long run shows what is in flight
     begun = time.time()
     head = ["", "%s %s" % (a_id, url)]
+    lines = [] if lede else ["  no lede -- the body will open with TKTK placeholders"]
     try:
-        found, parsed, stored, dupes, problems, lines = scrape_site(
-            browser, conn, a_id, url, recipe, cutoff, lede, drop, drop_title)
+        found, parsed, stored, dupes, problems = scrape_site(
+            browser, conn, a_id, url, recipe, cutoff, lede, drop, drop_title, lines)
     except Exception as e:
         why = "%s: %s" % (type(e).__name__, e)
-        return Result(a_id, 0, 0, 0, 0, [], why, head + ["  ERROR " + why])
+        return Result(a_id, 0, 0, 0, 0, [], why, head + lines + ["  ERROR " + why])
     lines.append("  %s done in %ds -- found=%s parsed=%s stored=%s dupes=%s"
                  % (a_id, time.time() - begun, found, parsed, stored, dupes))
     return Result(a_id, found, parsed, stored, dupes, problems, None, head + lines)
