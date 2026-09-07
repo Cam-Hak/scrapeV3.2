@@ -1,4 +1,4 @@
-from scraper.browser import Browser, SETTLE_POLLS, settled, wait_for
+from scraper.browser import Browser, CHALLENGE, SETTLE_POLLS, settled, wait_for
 
 
 def test_returns_once_the_size_holds_still():
@@ -85,3 +85,52 @@ def test_a_session_that_keeps_failing_is_torn_down():
         pass
     assert sb.quit_called
     assert b.sb is None
+
+
+class TracingSb:
+    # get_html returns the challenge marker for the first `challenge_reads` reads, then the real page
+    def __init__(self, challenge_reads):
+        self.calls = []
+        self.challenge_reads = challenge_reads
+        self.reads = 0
+
+    def open(self, url):
+        self.calls.append("open")
+
+    def evaluate(self, script):
+        self.calls.append("evaluate")
+        return 12
+
+    def sleep(self, secs):
+        pass
+
+    def get_html(self):
+        self.calls.append("get_html")
+        self.reads += 1
+        return CHALLENGE if self.reads <= self.challenge_reads else "<html>real</html>"
+
+    def is_element_visible(self, selector):
+        return False
+
+
+def settle_passes(calls):
+    # a settle pass is a run of "evaluate" calls; a challenge check never calls evaluate
+    labels = [c for c in calls if c in ("evaluate", "get_html")]
+    return sum(1 for i, label in enumerate(labels)
+               if label == "evaluate" and (i == 0 or labels[i - 1] != "evaluate"))
+
+
+def test_settle_runs_before_the_challenge_check_and_again_once_it_clears():
+    sb = TracingSb(challenge_reads=2)
+    b = browser_on(sb)
+    b.get("https://site.test/a")
+    labels = [c for c in sb.calls if c in ("evaluate", "get_html")]
+    assert labels[0] == "evaluate"
+    assert settle_passes(sb.calls) == 2
+
+
+def test_an_unchallenged_page_settles_exactly_once():
+    sb = TracingSb(challenge_reads=0)
+    b = browser_on(sb)
+    b.get("https://site.test/a")
+    assert settle_passes(sb.calls) == 1

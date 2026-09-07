@@ -71,14 +71,16 @@ class Browser:
 
     def _past_challenge(self):
         # a Cloudflare interstitial can outlast the settle poll, so wait for the real page
-        if CHALLENGE not in self.sb.get_html():
+        html = self.sb.get_html()
+        if CHALLENGE not in html:
             return False
         deadline = time.time() + CHALLENGE_WAIT
-        while CHALLENGE in self.sb.get_html() and time.time() < deadline:
+        while CHALLENGE in html and time.time() < deadline:
             if self.sb.is_element_visible(TURNSTILE):
                 self.sb.solve_captcha()
             self.sb.sleep(SETTLE)
-        return True
+            html = self.sb.get_html()
+        return CHALLENGE not in html
 
     def close(self):
         if self.sb:
