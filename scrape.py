@@ -1,4 +1,6 @@
 import argparse
+import queue
+import threading
 import time
 from collections import namedtuple
 from datetime import date, timedelta
@@ -10,7 +12,7 @@ from scraper.browser import Browser
 from scraper.lede import footer, load_ledes, render
 from scraper.parse import _norm, extract, find_items, set_dayfirst
 from scraper.report import Report
-from scraper.sites import load_sites
+from scraper.sites import by_host, load_sites
 from scraper.strip import load_strips, patterns_for
 from scraper.store import Store
 
@@ -104,6 +106,24 @@ def absorb(r, store, report):
         log(line)
 
 
+def worker(jobs, results):
+    try:
+        with Browser() as browser:
+            conn = articles.connect()
+            try:
+                while True:
+                    try:
+                        group = jobs.get_nowait()
+                    except queue.Empty:
+                        return
+                    for job in group:
+                        results.put(run_site(browser, conn, *job))
+            finally:
+                conn.close()
+    except Exception as e:
+        log("worker stopped: %s: %s" % (type(e).__name__, e))
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--days", type=int, default=config.DEFAULT_DAYS)
@@ -112,6 +132,7 @@ def main():
     ap.add_argument("--from", dest="start", type=int)
     ap.add_argument("--last", type=int)
     ap.add_argument("--limit", type=int)
+    ap.add_argument("--workers", type=int, default=config.WORKERS)
     args = ap.parse_args()
     cutoff = date.today() - timedelta(days=args.days)
     sites = load_sites(config.SITES_CSV, args.id, args.start, args.limit, args.last)
@@ -124,32 +145,48 @@ def main():
         store.clear_failures()
     ledes = load_ledes(config.LEDES_CSV)
     strips = load_strips(config.STRIP_CSV)
-    conn = articles.connect()
     report = Report(cutoff, len(sites))
     log("%d site(s), keeping articles on or after %s" % (len(sites), cutoff))
-    with Browser() as browser:
-        for a_id, url in sites:
-            recipe = store.get_recipe(a_id)
-            if not recipe:
-                log("")
-                log("%s %s" % (a_id, url))
-                log("  no recipe -- run build_recipes.py --id %s" % a_id)
-                report.skip(a_id, "no recipe")
-                continue
-            if store.is_failed(a_id):
-                log("")
-                log("%s %s" % (a_id, url))
-                log("  marked failed, skipping -- use --retry-failed")
-                report.skip(a_id, "marked failed, skipped")
-                continue
-            lede = ledes.get(a_id)
-            if not lede:
-                report.no_lede()
-            absorb(run_site(browser, conn, a_id, url, recipe, cutoff, lede,
-                            patterns_for(strips, a_id), patterns_for(strips, a_id, "title")),
-                   store, report)
 
-    conn.close()
+    jobs = queue.Queue()
+    ready = []
+    for a_id, url in sites:
+        recipe = store.get_recipe(a_id)
+        if not recipe:
+            log("")
+            log("%s %s" % (a_id, url))
+            log("  no recipe -- run build_recipes.py --id %s" % a_id)
+            report.skip(a_id, "no recipe")
+            continue
+        if store.is_failed(a_id):
+            log("")
+            log("%s %s" % (a_id, url))
+            log("  marked failed, skipping -- use --retry-failed")
+            report.skip(a_id, "marked failed, skipped")
+            continue
+        lede = ledes.get(a_id)
+        if not lede:
+            report.no_lede()
+        ready.append((a_id, url, recipe, cutoff, lede,
+                      patterns_for(strips, a_id), patterns_for(strips, a_id, "title")))
+    for group in by_host(ready):
+        jobs.put(group)
+
+    results = queue.Queue()
+    threads = [threading.Thread(target=worker, args=(jobs, results))
+               for _ in range(args.workers)]
+    for t in threads:
+        t.start()
+    # a worker that dies must not hang the drain, so watch the threads rather than a count
+    while any(t.is_alive() for t in threads) or not results.empty():
+        try:
+            r = results.get(timeout=0.5)
+        except queue.Empty:
+            continue
+        absorb(r, store, report)
+    for t in threads:
+        t.join()
+
     store.close()
     log("")
     for line in report.lines():
