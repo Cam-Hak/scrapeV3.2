@@ -23,10 +23,15 @@ def log(msg):
 
 def scrape_site(browser, conn, a_id, url, recipe, cutoff, lede, drop, drop_title, lines):
     listing = browser.get(url)
+    rows = find_items(listing, url, recipe)
+    if not rows:
+        # nothing at all usually means js content that had not landed yet, so wait properly
+        listing = browser.get(url, patient=True)
+        rows = find_items(listing, url, recipe)
+        lines.append("  listing was empty -- fetched again patiently")
     # the site's date habit is re-read every run, so a stale flag cannot outlive one
     if recipe.date_on_listing and set_dayfirst(recipe, [BeautifulSoup(listing, "html.parser")]):
         lines.append("  numeric dates read %s first -- recipe flag corrected" % ("day" if recipe.dayfirst else "month"))
-    rows = find_items(listing, url, recipe)
     lines.append("  listing -> %d links" % len(rows))
     extracted = stored = duplicates = stale = repeated = 0
     previous = None

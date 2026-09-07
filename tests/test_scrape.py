@@ -136,3 +136,38 @@ def test_drain_absorbs_every_result_and_returns_without_hanging():
 
     assert not drainer.is_alive()  # a hang would leave the drainer thread still running
     assert sorted(store.results) == [(1, True), (2, True)]
+
+
+class ListingBrowser:
+    def __init__(self, pages):
+        self.pages = pages
+        self.calls = []
+
+    def get(self, url, patient=False):
+        self.calls.append((url, patient))
+        return self.pages[min(len(self.calls) - 1, len(self.pages) - 1)]
+
+
+LISTING = '<html><body><a class="post" href="/a">One</a></body></html>'
+ARTICLE = '<html><body><h1>One</h1><time>2026-09-05</time><p>Body text here.</p></body></html>'
+
+
+def listing_recipe():
+    return Recipe(link_selector="a.post", url_filter="", headline_selector="h1",
+                  date_selector="time")
+
+
+def test_an_empty_listing_is_fetched_again_patiently():
+    browser = ListingBrowser(["<html><body></body></html>", LISTING, ARTICLE])
+    run_site(browser, None, 101, "https://site.test/news", listing_recipe(),
+             date(2026, 9, 1), "lede", (), ())
+    assert browser.calls[0] == ("https://site.test/news", False)
+    assert browser.calls[1] == ("https://site.test/news", True)
+
+
+def test_a_listing_that_yields_links_is_not_fetched_twice():
+    browser = ListingBrowser([LISTING, ARTICLE])
+    run_site(browser, None, 101, "https://site.test/news", listing_recipe(),
+             date(2026, 9, 1), "lede", (), ())
+    assert browser.calls[0] == ("https://site.test/news", False)
+    assert browser.calls[1][0] == "https://site.test/a"

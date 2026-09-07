@@ -134,3 +134,18 @@ def test_an_unchallenged_page_settles_exactly_once():
     b = browser_on(sb)
     b.get("https://site.test/a")
     assert settle_passes(sb.calls) == 1
+
+
+def test_a_patient_settle_waits_for_a_longer_quiet_run():
+    reads = iter([100] * 12)
+    naps = []
+    settled(lambda: next(reads), naps.append, stable=6)
+    assert len(naps) == 6
+
+
+def test_a_patient_settle_rides_out_a_pause_before_the_content_lands():
+    # the shell holds still for four polls, then the js grid arrives
+    reads = iter([76, 76, 76, 76, 276, 276, 276, 276, 276, 276, 276])
+    naps = []
+    settled(lambda: next(reads), naps.append, stable=4)
+    assert len(naps) == 8
