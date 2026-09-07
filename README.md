@@ -26,6 +26,22 @@ python build_recipes.py
 - --id xx
 - --last x (gathers last x sites in the csv)
 - --force (re runs recipe creation)
+- --workers n (sites in parallel, default 4; use 1 to run one at a time)
+
+## Running on a Linux server
+
+Chrome has to run headed — headless is detectable — so a server with no display needs a virtual one. There is no code change for this:
+
+```bash
+xvfb-run python scrape.py --workers 6
+```
+
+Worker count is bounded by Chrome, not by Python. Each browser is roughly 300-500MB and bursts a core while rendering. **This section is untested; a human will verify it on the target server.**
+
+| Server | Workers |
+|---|---|
+| 4 vCPU / 8GB | 4 |
+| 8 vCPU / 16GB | 8 |
 
 ## DB Commands
 *If sqlite3 isn't installed run one of these commands*
