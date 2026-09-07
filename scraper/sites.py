@@ -17,8 +17,13 @@ def load_sites(path, only=None, start=None, limit=None, last=None):
     return rows
 
 
+def _host(url):
+    netloc = urlparse(url).netloc.lower().split(":")[0]
+    return netloc[4:] if netloc.startswith("www.") else netloc
+
+
 def by_host(sites):
     groups = {}
     for site in sites:
-        groups.setdefault(urlparse(site[1]).netloc, []).append(site)
+        groups.setdefault(_host(site[1]), []).append(site)
     return list(groups.values())
