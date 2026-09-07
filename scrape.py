@@ -1,5 +1,6 @@
 import argparse
 import time
+from collections import namedtuple
 from datetime import date, timedelta
 
 from bs4 import BeautifulSoup
@@ -19,12 +20,13 @@ def log(msg):
 
 
 def scrape_site(browser, conn, a_id, url, recipe, cutoff, lede, drop, drop_title):
+    lines = [] if lede else ["  no lede -- the body will open with TKTK placeholders"]
     listing = browser.get(url)
     # the site's date habit is re-read every run, so a stale flag cannot outlive one
     if recipe.date_on_listing and set_dayfirst(recipe, [BeautifulSoup(listing, "html.parser")]):
-        log("  numeric dates read %s first -- recipe flag corrected" % ("day" if recipe.dayfirst else "month"))
+        lines.append("  numeric dates read %s first -- recipe flag corrected" % ("day" if recipe.dayfirst else "month"))
     rows = find_items(listing, url, recipe)
-    log("  listing -> %d links" % len(rows))
+    lines.append("  listing -> %d links" % len(rows))
     extracted = stored = duplicates = stale = repeated = 0
     previous = None
     problems = []
@@ -33,15 +35,15 @@ def scrape_site(browser, conn, a_id, url, recipe, cutoff, lede, drop, drop_title
         tag = "  [%d/%d]" % (i, len(rows))
         item = extract(browser.get(link), recipe, drop, link, row, drop_title)
         if not item:
-            log("%s no headline, date or body -- skipped" % tag)
+            lines.append("%s no headline, date or body -- skipped" % tag)
             continue
         extracted += 1
         if item["date"] < cutoff:
             stale += 1
-            log("%s %s older than cutoff (%d in a row)" % (tag, item["date"], stale))
+            lines.append("%s %s older than cutoff (%d in a row)" % (tag, item["date"], stale))
             # listings run newest-first, so a run of old ones means the rest are older
             if stale >= config.STOP_AFTER_OLD:
-                log("  stopping this site: %d older articles in a row" % stale)
+                lines.append("  stopping this site: %d older articles in a row" % stale)
                 break
             continue
         stale = 0
@@ -51,20 +53,55 @@ def scrape_site(browser, conn, a_id, url, recipe, cutoff, lede, drop, drop_title
         )
         if ok:
             stored += 1
-            log("%s %s stored  %s" % (tag, item["date"], item["headline"][:58]))
+            lines.append("%s %s stored  %s" % (tag, item["date"], item["headline"][:58]))
         elif reason == "duplicate":
             duplicates += 1
-            log("%s %s already have it" % (tag, item["date"]))
+            lines.append("%s %s already have it" % (tag, item["date"]))
         else:
             problems.append(reason)
-            log("%s %s FAILED: %s" % (tag, item["date"], reason))
+            lines.append("%s %s FAILED: %s" % (tag, item["date"], reason))
         if _norm(item["headline"]) == previous:
             repeated += 1
-            log("         WARNING same headline as the previous article")
+            lines.append("         WARNING same headline as the previous article")
         previous = _norm(item["headline"])
     if repeated:
         problems.append("%d repeated headline(s) -- selector may be a banner" % repeated)
-    return len(rows), extracted, stored, duplicates, problems
+    return len(rows), extracted, stored, duplicates, problems, lines
+
+
+Result = namedtuple("Result", "a_id found parsed stored dupes problems error lines")
+
+
+def run_site(browser, conn, a_id, url, recipe, cutoff, lede, drop, drop_title):
+    log("  -> %s %s" % (a_id, url))  # one interleaved line so a long run shows what is in flight
+    begun = time.time()
+    head = ["", "%s %s" % (a_id, url)]
+    try:
+        found, parsed, stored, dupes, problems, lines = scrape_site(
+            browser, conn, a_id, url, recipe, cutoff, lede, drop, drop_title)
+    except Exception as e:
+        why = "%s: %s" % (type(e).__name__, e)
+        return Result(a_id, 0, 0, 0, 0, [], why, head + ["  ERROR " + why])
+    lines.append("  %s done in %ds -- found=%s parsed=%s stored=%s dupes=%s"
+                 % (a_id, time.time() - begun, found, parsed, stored, dupes))
+    return Result(a_id, found, parsed, stored, dupes, problems, None, head + lines)
+
+
+def absorb(r, store, report):
+    if r.error:
+        store.record_result(r.a_id, False)
+        report.error(r.a_id, r.error)
+    else:
+        # links but nothing parsed means the selectors have gone stale
+        healthy = r.found > 0 and r.parsed > 0
+        store.record_result(r.a_id, healthy)
+        report.site(r.a_id, r.found, r.parsed, r.stored, r.dupes)
+        if not healthy:
+            report.problem(r.a_id, "found=%s parsed=0" % r.found)
+        for problem in r.problems:
+            report.problem(r.a_id, problem)
+    for line in r.lines:
+        log(line)
 
 
 def main():
@@ -92,42 +129,25 @@ def main():
     log("%d site(s), keeping articles on or after %s" % (len(sites), cutoff))
     with Browser() as browser:
         for a_id, url in sites:
-            log("")
-            log("%s %s" % (a_id, url))
             recipe = store.get_recipe(a_id)
             if not recipe:
+                log("")
+                log("%s %s" % (a_id, url))
                 log("  no recipe -- run build_recipes.py --id %s" % a_id)
                 report.skip(a_id, "no recipe")
                 continue
             if store.is_failed(a_id):
+                log("")
+                log("%s %s" % (a_id, url))
                 log("  marked failed, skipping -- use --retry-failed")
                 report.skip(a_id, "marked failed, skipped")
                 continue
             lede = ledes.get(a_id)
             if not lede:
-                log("  no lede -- the body will open with TKTK placeholders")
                 report.no_lede()
-            begun = time.time()
-            try:
-                found, extracted, stored, dupes, problems = scrape_site(
-                    browser, conn, a_id, url, recipe, cutoff, lede,
-                    patterns_for(strips, a_id), patterns_for(strips, a_id, "title")
-                )
-            except Exception as e:
-                log("  ERROR %s: %s" % (type(e).__name__, e))
-                store.record_result(a_id, False)
-                report.error(a_id, "%s: %s" % (type(e).__name__, e))
-                continue
-            # links but nothing parsed means the selectors have gone stale
-            healthy = found > 0 and extracted > 0
-            store.record_result(a_id, healthy)
-            report.site(a_id, found, extracted, stored, dupes)
-            if not healthy:
-                report.problem(a_id, "found=%s parsed=0" % found)
-            for problem in problems:
-                report.problem(a_id, problem)
-            log("  %s done in %ds -- found=%s parsed=%s stored=%s dupes=%s"
-                % (a_id, time.time() - begun, found, extracted, stored, dupes))
+            absorb(run_site(browser, conn, a_id, url, recipe, cutoff, lede,
+                            patterns_for(strips, a_id), patterns_for(strips, a_id, "title")),
+                   store, report)
 
     conn.close()
     store.close()
