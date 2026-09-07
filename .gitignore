@@ -5,3 +5,7 @@ __pycache__/
 
 # production dumps, local only -- db/press_releases.sql is the schema and is kept
 db/*.dmp.sql
+
+# run-log artifacts from the verification checklist
+baseline.txt
+after.txt
