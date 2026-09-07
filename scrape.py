@@ -124,6 +124,14 @@ def worker(jobs, results):
         log("worker stopped: %s: %s" % (type(e).__name__, e))
 
 
+def stop(jobs):
+    while True:
+        try:
+            jobs.get_nowait()
+        except queue.Empty:
+            return
+
+
 def drain(threads, results, store, report):
     # a worker that dies must not hang the drain, so watch the threads rather than a count
     while any(t.is_alive() for t in threads) or not results.empty():
@@ -191,14 +199,12 @@ def main():
         drain(threads, results, store, report)
     except KeyboardInterrupt:
         log("interrupted -- letting workers finish their current group, then stopping")
-        while True:
-            try:
-                jobs.get_nowait()
-            except queue.Empty:
-                break
+        stop(jobs)
         drain(threads, results, store, report)
-    for t in threads:
-        t.join()
+    finally:
+        stop(jobs)
+        for t in threads:
+            t.join()
 
     store.close()
     log("")

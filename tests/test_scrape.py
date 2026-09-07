@@ -130,4 +130,4 @@ def test_drain_absorbs_every_result_and_returns_without_hanging():
     drainer.join(timeout=5)
 
     assert not drainer.is_alive()  # a hang would leave the drainer thread still running
-    assert {a_id for a_id, ok in store.results} == {1, 2}
+    assert sorted(store.results) == [(1, True), (2, True)]
