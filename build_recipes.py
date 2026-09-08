@@ -25,7 +25,7 @@ def log(msg):
     print(msg, flush=True)
 
 
-def build(browser, client, url, lede, drop, drop_title):
+def build(browser, client, url, lede, drop, drop_title, prune=()):
     fetch = cache(browser)
     log("  loading listing page")
     listing = fetch(url)
@@ -60,13 +60,13 @@ def build(browser, client, url, lede, drop, drop_title):
                 recipe.date_selector = fields.get("date_selector", "")
                 recipe.date_fallback = fields.get("date_fallback", "")
             log("  headline=%r date=%r" % (recipe.headline_selector, recipe.date_selector))
-        item = extract(article, recipe, drop, link, rows.get(link), drop_title)
+        item = extract(article, recipe, drop, link, rows.get(link), drop_title, prune)
         if not item:
             problem = "the selectors matched nothing on the article page"
             log("  those selectors matched nothing on this article")
             continue
         passed, total, bodies, heads = verify_elsewhere(fetch, recipe, found, link, drop,
-                                                        rows, drop_title)
+                                                        rows, drop_title, prune)
         if is_banner(item["headline"], heads):
             problem = ("headline_selector returned %r on every article, so it is a"
                        " banner rather than the article headline" % item["headline"][:60])
@@ -86,7 +86,7 @@ def build(browser, client, url, lede, drop, drop_title):
             for line in recipe.boilerplate:
                 log("    | %s" % line[:84])
         # the recipe has changed since the first extract, so take the sample again
-        item = extract(article, recipe, drop, link, rows.get(link), drop_title)
+        item = extract(article, recipe, drop, link, rows.get(link), drop_title, prune)
         if not item:
             problem = "the sample only parsed through a selector that proved to be a banner"
             log("  sample no longer parses under the final recipe -- trying another sample")
@@ -164,7 +164,7 @@ def _cut(rows, field):
     return any(str(row[field] or "").rstrip().endswith(("...", "…")) for row in rows)
 
 
-def verify_elsewhere(fetch, recipe, found, used, drop, rows=None, drop_title=()):
+def verify_elsewhere(fetch, recipe, found, used, drop, rows=None, drop_title=(), prune=()):
     # selectors derived from one page can be tied to it, so prove them on several
     others = [l for l in found[:CANDIDATES + VERIFY] if l != used][:VERIFY]
     soups = [BeautifulSoup(fetch(o), "html.parser") for o in others]
@@ -173,7 +173,8 @@ def verify_elsewhere(fetch, recipe, found, used, drop, rows=None, drop_title=())
         log("  numeric dates on this site read day first")
     passed, bodies, heads = 0, [], []
     for other in others:
-        item = extract(fetch(other), recipe, drop, other, (rows or {}).get(other), drop_title)
+        item = extract(fetch(other), recipe, drop, other, (rows or {}).get(other),
+                       drop_title, prune)
         if item:
             passed += 1
             bodies.append(item["body"])
@@ -256,7 +257,8 @@ def main():
             try:
                 recipe, error = build(browser, client, url, ledes.get(a_id),
                                       patterns_for(strips, a_id),
-                                      patterns_for(strips, a_id, "title"))
+                                      patterns_for(strips, a_id, "title"),
+                                      patterns_for(strips, a_id, "prune"))
             except Exception as e:
                 recipe, error = None, "%s: %s" % (type(e).__name__, e)
             if recipe:

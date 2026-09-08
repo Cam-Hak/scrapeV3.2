@@ -78,7 +78,8 @@ class RaisingBrowser:
 
 
 def test_run_site_reports_the_exception_with_zero_counts():
-    r = run_site(RaisingBrowser(), None, 101, "https://site.test", None, date(2026, 1, 1), "lede", [], [])
+    r = run_site(RaisingBrowser(), None, 101, "https://site.test", None, date(2026, 1, 1),
+                 "lede", [], [], [])
     assert r.a_id == 101
     assert r.found == r.parsed == r.stored == r.dupes == 0
     assert r.problems == []
@@ -103,7 +104,7 @@ def test_run_site_keeps_lines_from_before_a_mid_site_exception():
     listing_html = '<html><body><a href="https://site.test/a1">Article</a></body></html>'
     recipe = Recipe(link_selector="a", url_filter="", headline_selector="h1", date_selector="time")
     r = run_site(RaisesOnSecondGet(listing_html), None, 101, "https://site.test", recipe,
-                 date(2020, 1, 1), None, [], [])
+                 date(2020, 1, 1), None, [], [], [])
     assert r.error is not None
     assert any("no lede" in line for line in r.lines)
     assert any("listing -> 1 links" in line for line in r.lines)
@@ -160,7 +161,7 @@ def listing_recipe():
 def test_an_empty_listing_is_fetched_again_patiently():
     browser = ListingBrowser(["<html><body></body></html>", LISTING, ARTICLE])
     run_site(browser, None, 101, "https://site.test/news", listing_recipe(),
-             date(2026, 9, 1), "lede", (), ())
+             date(2026, 9, 1), "lede", (), (), ())
     assert browser.calls[0] == ("https://site.test/news", False)
     assert browser.calls[1] == ("https://site.test/news", True)
 
@@ -168,6 +169,6 @@ def test_an_empty_listing_is_fetched_again_patiently():
 def test_a_listing_that_yields_links_is_not_fetched_twice():
     browser = ListingBrowser([LISTING, ARTICLE])
     run_site(browser, None, 101, "https://site.test/news", listing_recipe(),
-             date(2026, 9, 1), "lede", (), ())
+             date(2026, 9, 1), "lede", (), (), ())
     assert browser.calls[0] == ("https://site.test/news", False)
     assert browser.calls[1][0] == "https://site.test/a"

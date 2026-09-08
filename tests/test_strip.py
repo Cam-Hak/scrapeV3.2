@@ -76,3 +76,14 @@ def test_no_patterns_leaves_the_title_alone():
 
 def test_a_title_cut_down_to_nothing_comes_back_empty():
     assert clean_title("Press Release:", ["Press Release:"]) == ""
+
+
+def test_a_prune_column_loads_class_names(tmp_path):
+    strips = write(tmp_path, "125,,,node--view-mode-card__list~related-block\n")
+    assert patterns_for(strips, 125, "prune") == ["node--view-mode-card__list", "related-block"]
+    assert patterns_for(strips, 125) == []
+
+
+def test_a_row_without_a_prune_column_has_no_classes(tmp_path):
+    strips = write(tmp_path, "34684,Background:,\n")
+    assert patterns_for(strips, 34684, "prune") == []

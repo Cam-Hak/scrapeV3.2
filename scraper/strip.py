@@ -2,8 +2,8 @@ import csv
 import re
 
 ALL = "*"
-BODY, TITLE = "body", "title"
-COLUMNS = (BODY, TITLE)
+BODY, TITLE, PRUNE = "body", "title", "prune"
+COLUMNS = (BODY, TITLE, PRUNE)
 SEPARATOR = "~"
 
 

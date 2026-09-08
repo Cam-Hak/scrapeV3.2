@@ -1,7 +1,18 @@
-# a_id,body,title -- one line per site, a_id of * applies to every site
+# a_id,body,title,prune -- one line per site, a_id of * applies to every site
 # body: drop any article line containing the text. title: cut the text out of the headline
+# prune: drop any element carrying the class before the body is read
 # separate several patterns in one column with ~
 34684,Background:,
 28015,press@eqca.org,
 29288,Faculty of Arts and HumanitiesJakobi,
 27311,,STATEMENT RELEASE: 
+127,Media Contact:,
+13,,,usa-banner__content~menu_link_content
+125,,,node--view-mode-card__list
+182,,,fusion-post-cards
+213,,,glossary
+892,,,evo-press-release__field-evo-issues
+1089,,,footer-cols
+3436,,,c15_forgetPassword~cmp-login~cmp-register
+5253,,,ila-slideover~cookieb-holder
+6930,,,main-nav

@@ -31,6 +31,11 @@ CLOCK = re.compile(r"[\s,|·-]*(?:at\s+)?\d{1,2}[:.]\d{2}\s*(?:[ap]\.?m\.?)?"
 DAY_WORD = re.compile(r"\b(today|yesterday|just now)\b[\s.,|·-]*$")
 URL_DATE = re.compile(r"/(20\d{2})/(\d{1,2})/(\d{1,2})(?:/|-|_|$)")
 MD_ESCAPE = re.compile(r"\\([^\w\s])")
+WIDGET_ROOTS = ("CybotCookiebotDialog", "onetrust-consent-sdk", "usercentrics-root",
+                "truste-consent-track", "qc-cmp2-container", "touchpoints-form-", "fba-")
+# a consent dialog or feedback form outweighs a short article, and trafilatura returns it instead
+WIDGET_PRUNE = ["//*[starts-with(@id, '%s')]" % root for root in WIDGET_ROOTS]
+CLASS_PRUNE = "//*[contains(concat(' ', normalize-space(@class), ' '), ' %s ')]"
 
 
 def find_links(html, base_url, recipe):
@@ -81,7 +86,7 @@ def find_items(html, base_url, recipe):
     return items
 
 
-def extract(html, recipe, drop=(), url=None, listing=None, drop_title=()):
+def extract(html, recipe, drop=(), url=None, listing=None, drop_title=(), prune=()):
     soup = BeautifulSoup(html, "html.parser")
     # the fallback is only consulted when the precise selector finds nothing
     known = listing or {}
@@ -93,7 +98,7 @@ def extract(html, recipe, drop=(), url=None, listing=None, drop_title=()):
         None if recipe.date_on_listing else
         _date(soup, recipe.date_selector, recipe.dayfirst)
         or _date(soup, recipe.date_fallback, recipe.dayfirst))
-    raw = _article_text(html)
+    raw = _article_text(html, prune)
     if raw and not date:
         date = _dateline(raw, recipe.dayfirst)
     if not date:
@@ -144,9 +149,10 @@ def _norm(s):
     return re.sub(r"[^a-z0-9]+", "", (s or "").lower())
 
 
-def _article_text(html):
+def _article_text(html, prune=()):
     # trafilatura picks the article out; html2text keeps its paragraph structure
-    inner = trafilatura.extract(html, output_format="html")
+    inner = trafilatura.extract(html, output_format="html",
+                                prune_xpath=WIDGET_PRUNE + [CLASS_PRUNE % c for c in prune])
     if not inner:
         return None
     reader = html2text.HTML2Text()
@@ -181,7 +187,7 @@ def _text(soup, selector):
 def _date(soup, selector, dayfirst=False):
     tags = _select(soup, selector)
     for tag in tags:
-        attr = tag.get("datetime")
+        attr = tag.get("datetime") or tag.get("content")
         # inline markup can split a date, so retry with the separators stripped out
         for raw in ([attr] if attr else []) + [tag.get_text(" ", strip=True),
                                                tag.get_text("", strip=True)]:

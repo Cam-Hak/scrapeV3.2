@@ -2,7 +2,8 @@ from datetime import date, datetime, timedelta
 
 from bs4 import BeautifulSoup
 
-from scraper.parse import _date, _dateline, _parse_date, _relative, find_items
+from scraper.parse import (_article_text, _date, _dateline, _parse_date, _relative,
+                           find_items)
 from scraper.recipe import Recipe
 
 NOW = datetime(2026, 9, 4, 12, 0)
@@ -164,3 +165,11 @@ def test_months_and_years_use_calendar_arithmetic():
     assert _relative("6 months ago", NOW) == date(2026, 3, 4)
     assert _relative("1 month ago", NOW) == date(2026, 8, 4)
     assert _relative("2 years ago", NOW) == date(2024, 9, 4)
+
+
+def test_a_pruned_class_is_kept_out_of_the_body():
+    html = ("<html><body><article><p>The agency announced a new rule on Tuesday morning.</p>"
+            "<ul class='node--view-mode-card__list'><li>Another release entirely</li></ul>"
+            "</article></body></html>")
+    assert "Another release" in (_article_text(html) or "")
+    assert "Another release" not in (_article_text(html, ["node--view-mode-card__list"]) or "")

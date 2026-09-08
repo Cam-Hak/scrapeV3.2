@@ -21,7 +21,7 @@ def log(msg):
     print(msg + "\n", end="", flush=True)  # one write so threads can't interleave inside a line
 
 
-def scrape_site(browser, conn, a_id, url, recipe, cutoff, lede, drop, drop_title, lines):
+def scrape_site(browser, conn, a_id, url, recipe, cutoff, lede, drop, drop_title, prune, lines):
     listing = browser.get(url)
     rows = find_items(listing, url, recipe)
     if not rows:
@@ -39,7 +39,7 @@ def scrape_site(browser, conn, a_id, url, recipe, cutoff, lede, drop, drop_title
     for i, row in enumerate(rows, 1):
         link = row["url"]
         tag = "  [%d/%d]" % (i, len(rows))
-        item = extract(browser.get(link), recipe, drop, link, row, drop_title)
+        item = extract(browser.get(link), recipe, drop, link, row, drop_title, prune)
         if not item:
             lines.append("%s no headline, date or body -- skipped" % tag)
             continue
@@ -78,14 +78,14 @@ def scrape_site(browser, conn, a_id, url, recipe, cutoff, lede, drop, drop_title
 Result = namedtuple("Result", "a_id found parsed stored dupes problems error lines")
 
 
-def run_site(browser, conn, a_id, url, recipe, cutoff, lede, drop, drop_title):
+def run_site(browser, conn, a_id, url, recipe, cutoff, lede, drop, drop_title, prune):
     log("  -> %s %s" % (a_id, url))  # one interleaved line so a long run shows what is in flight
     begun = time.time()
     head = ["", "%s %s" % (a_id, url)]
     lines = [] if lede else ["  no lede -- the body will open with TKTK placeholders"]
     try:
         found, parsed, stored, dupes, problems = scrape_site(
-            browser, conn, a_id, url, recipe, cutoff, lede, drop, drop_title, lines)
+            browser, conn, a_id, url, recipe, cutoff, lede, drop, drop_title, prune, lines)
     except Exception as e:
         why = "%s: %s" % (type(e).__name__, e)
         return Result(a_id, 0, 0, 0, 0, [], why, head + lines + ["  ERROR " + why])
@@ -191,7 +191,8 @@ def main():
         if not lede:
             report.no_lede()
         ready.append((a_id, url, recipe, cutoff, lede,
-                      patterns_for(strips, a_id), patterns_for(strips, a_id, "title")))
+                      patterns_for(strips, a_id), patterns_for(strips, a_id, "title"),
+                      patterns_for(strips, a_id, "prune")))
     for group in by_host(ready):
         jobs.put(group)
 

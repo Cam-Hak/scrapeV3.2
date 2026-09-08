@@ -7,10 +7,10 @@ def test_sites_on_different_hosts_become_separate_groups():
 
 
 def test_sites_sharing_a_host_stay_in_one_group():
-    # production tuples are 7-wide (a_id, url, recipe, cutoff, lede, drop, drop_title) -- url stays at index 1
-    sites = [(1, "https://a.test/x", None, None, None, [], []),
-             (2, "https://b.test/y", None, None, None, [], []),
-             (3, "https://a.test/z", None, None, None, [], [])]
+    # production tuples are 8-wide (a_id, url, recipe, cutoff, lede, drop, drop_title, prune) -- url stays at index 1
+    sites = [(1, "https://a.test/x", None, None, None, [], [], []),
+             (2, "https://b.test/y", None, None, None, [], [], []),
+             (3, "https://a.test/z", None, None, None, [], [], [])]
     assert by_host(sites) == [[sites[0], sites[2]], [sites[1]]]
 
 

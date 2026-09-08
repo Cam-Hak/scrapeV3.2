@@ -10,6 +10,7 @@ FOOTNOTE = re.compile(r"^\[\d+\]")
 HEADING = re.compile(r"^(footnotes?|notes|references?|endnotes?|citations?|sources?)$", re.I)
 NOISE = re.compile(r"\s*\(Opens in a new window\)", re.I)
 MD_HEADING = re.compile(r"^#{1,6}\s+")
+MD_QUOTE = re.compile(r"^>+\s*")
 HRULE = re.compile(r"^((\*\s*){3,}|-{3,}|_{3,})$")
 ENDMARK = re.compile(r"^(ends?|###|-30-|\[ends\])$", re.I)
 PLATFORM = r"X|Twitter|Facebook|Instagram|LinkedIn|YouTube|Threads|TikTok|Flickr"
@@ -21,7 +22,7 @@ MAX_KICKERS = 2
 
 def clean(text, headline, date, drop=()):
     lines = [NOISE.sub("", l).strip() for l in text.split("\n")]
-    lines = [MD_HEADING.sub("", l) for l in lines]
+    lines = [MD_QUOTE.sub("", MD_HEADING.sub("", l)) for l in lines]
     lines = [l for l in lines if l and l != "|" and not HRULE.match(l)]
     lines = [l for l in lines if not _dropped(l, drop)]
     lines = [l for l in lines if not SOCIAL.match(l) and not FOLLOW.match(l)]
