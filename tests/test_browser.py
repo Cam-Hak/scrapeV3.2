@@ -1,4 +1,5 @@
-from scraper.browser import Browser, CHALLENGE, SETTLE_POLLS, settled, wait_for
+from scraper.browser import (Browser, CHALLENGE, PATIENT_POLLS, SETTLE_POLLS, settled,
+                             wait_for)
 
 
 def test_returns_once_the_size_holds_still():
@@ -149,3 +150,18 @@ def test_a_patient_settle_rides_out_a_pause_before_the_content_lands():
     naps = []
     settled(lambda: next(reads), naps.append, stable=4)
     assert len(naps) == 8
+
+
+def test_a_patient_settle_outlasts_the_ordinary_poll_budget():
+    # the page is still changing past the ordinary ceiling, then the list lands
+    reads = iter(list(range(76, 76 + SETTLE_POLLS + 5)) + [276] * 40)
+    naps = []
+    settled(lambda: next(reads), naps.append, stable=30, polls=PATIENT_POLLS)
+    assert len(naps) > SETTLE_POLLS
+
+
+def test_a_patient_settle_still_gives_up_on_a_page_that_never_stops_growing():
+    sizes = iter(range(100, 5000))
+    naps = []
+    settled(lambda: next(sizes), naps.append, stable=30, polls=PATIENT_POLLS)
+    assert len(naps) == PATIENT_POLLS

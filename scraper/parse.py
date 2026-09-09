@@ -244,6 +244,15 @@ def _url_date(url):
 
 
 def _parse_date(raw, dayfirst=False):
+    found = _fuzzy(raw, dayfirst)
+    if found:
+        return found
+    # a phone number or address beside the date defeats the fuzzy read, so retry on the date alone
+    only = DATE_TEXT.search(raw or "")
+    return _fuzzy(only.group(0), dayfirst) if only else None
+
+
+def _fuzzy(raw, dayfirst=False):
     # a leading 4-digit year always means year-month-day, whatever the site's habit is
     dayfirst = dayfirst and not YEAR_FIRST.match(raw or "")
     try:

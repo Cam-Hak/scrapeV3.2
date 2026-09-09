@@ -11,19 +11,20 @@ SETTLE = 2
 CHALLENGE_WAIT = 30
 POLL = 0.3
 STABLE_READS = 3
-PATIENT_READS = 20
+PATIENT_READS = 30
 SETTLE_POLLS = 40
+PATIENT_POLLS = 100
 SIZE = "document.documentElement.outerHTML.length"
 # headless never clears Cloudflare, so run headed and park the window off-screen
 OFFSCREEN = (["--window-position=-3000,-3000", "--window-size=1400,1000"]
              if sys.platform == "win32" else None)
 
 
-def settled(size, sleep, stable=STABLE_READS):
+def settled(size, sleep, stable=STABLE_READS, polls=SETTLE_POLLS):
     # js-built listings land after the page loads, so poll until the size holds still
     last = size()
     seen = 0
-    for _ in range(SETTLE_POLLS):
+    for _ in range(polls):
         sleep(POLL)
         now = size()
         seen = seen + 1 if now == last else 0
@@ -68,8 +69,10 @@ class Browser:
         return self.sb.get_html()
 
     def _settle(self, patient=False):
-        settled(lambda: self.sb.evaluate(SIZE), self.sb.sleep,
-                PATIENT_READS if patient else STABLE_READS)
+        # a quiet run only proves the page finished if it outlasts the page's own pauses
+        reads, polls = ((PATIENT_READS, PATIENT_POLLS) if patient
+                        else (STABLE_READS, SETTLE_POLLS))
+        settled(lambda: self.sb.evaluate(SIZE), self.sb.sleep, reads, polls)
 
     def _past_challenge(self):
         # a Cloudflare interstitial can outlast the settle poll, so wait for the real page

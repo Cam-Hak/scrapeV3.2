@@ -173,3 +173,19 @@ def test_a_pruned_class_is_kept_out_of_the_body():
             "</article></body></html>")
     assert "Another release" in (_article_text(html) or "")
     assert "Another release" not in (_article_text(html, ["node--view-mode-card__list"]) or "")
+
+
+def test_a_date_survives_a_phone_number_beside_it():
+    byline = "ARL Events | 202-296-2296 | events@arl.org |  August 25, 2026"
+    assert _parse_date(byline) == date(2026, 8, 25)
+
+
+def test_a_byline_date_element_is_read_through_the_contact_details():
+    soup = BeautifulSoup(
+        '<span class="post-date">Kaylyn Groves | 202-296-2296 | k@arl.org | August 20, 2026</span>',
+        "html.parser")
+    assert _date(soup, "span.post-date") == date(2026, 8, 20)
+
+
+def test_text_with_no_date_is_still_rejected():
+    assert _parse_date("Kaylyn Groves | 202-296-2296 | kaylyn@arl.org") is None

@@ -29,16 +29,12 @@ def build(browser, client, url, lede, drop, drop_title, prune=()):
     fetch = cache(browser)
     log("  loading listing page")
     listing = fetch(url)
-    page = skeleton(listing)
-    log("  asking the model where the article links are (skeleton %d chars%s)"
-        % (len(page), " -- TRUNCATED, it may not see the whole list"
-           if len(page) >= SKELETON_LIMIT else ""))
-    links = link_recipe(client, page)
-    recipe = Recipe(links.get("link_selector", ""), links.get("url_filter", ""), "", "",
-                    item_selector=links.get("item_selector", ""))
-    log("  item=%r link=%r url_filter=%r"
-        % (recipe.item_selector, recipe.link_selector, recipe.url_filter))
-    found = read_listing(recipe, links, listing, url)
+    recipe, links, found = read_page(client, listing, url)
+    if not found:
+        # nothing at all usually means js content that had not landed yet, so wait properly
+        log("  nothing matched -- loading the listing again patiently")
+        listing = browser.get(url, patient=True)
+        recipe, links, found = read_page(client, listing, url)
     log("  those match %d links" % len(found))
     if not found:
         return None, "no article links found"
@@ -94,6 +90,19 @@ def build(browser, client, url, lede, drop, drop_title, prune=()):
         show_sample(item, lede, link)
         return recipe, None
     return None, "selectors matched no sample article (tried %d)" % min(CANDIDATES, len(found))
+
+
+def read_page(client, listing, url):
+    page = skeleton(listing)
+    log("  asking the model where the article links are (skeleton %d chars%s)"
+        % (len(page), " -- TRUNCATED, it may not see the whole list"
+           if len(page) >= SKELETON_LIMIT else ""))
+    links = link_recipe(client, page)
+    recipe = Recipe(links.get("link_selector", ""), links.get("url_filter", ""), "", "",
+                    item_selector=links.get("item_selector", ""))
+    log("  item=%r link=%r url_filter=%r"
+        % (recipe.item_selector, recipe.link_selector, recipe.url_filter))
+    return recipe, links, read_listing(recipe, links, listing, url)
 
 
 def cache(browser, sleep=time.sleep):

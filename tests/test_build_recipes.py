@@ -1,4 +1,6 @@
-from build_recipes import _use_listing, cache, is_banner, loosen, read_listing
+from types import SimpleNamespace
+
+from build_recipes import _use_listing, build, cache, is_banner, loosen, read_listing
 from scraper import config
 from scraper.recipe import Recipe
 
@@ -121,3 +123,51 @@ def test_each_new_page_is_throttled_but_a_cached_one_is_not():
     fetch("u1")
     fetch("u2")
     assert naps == [config.REQUEST_DELAY, config.REQUEST_DELAY]
+
+
+class ListingBrowser:
+    def __init__(self, pages):
+        self.pages = pages
+        self.calls = []
+
+    def get(self, url, patient=False):
+        self.calls.append((url, patient))
+        return self.pages[min(len(self.calls) - 1, len(self.pages) - 1)]
+
+
+class FakeClient:
+    def __init__(self, *replies):
+        self.replies = replies
+        self.asked = []
+        self.messages = self
+
+    def create(self, **kw):
+        self.asked.append(kw["messages"][0]["content"])
+        return SimpleNamespace(content=[SimpleNamespace(
+            text=self.replies[min(len(self.asked) - 1, len(self.replies) - 1)])])
+
+
+LINKS = ('{"link_selector": "a.post", "url_filter": "", "item_selector": "",'
+         ' "listing_headline_selector": "", "listing_date_selector": ""}')
+FIELDS = ('{"headline_selector": "h1", "date_selector": "time",'
+          ' "headline_fallback": "", "date_fallback": ""}')
+EMPTY = "<html><body></body></html>"
+ROWS = '<html><body><a class="post" href="/read/one">One</a></body></html>'
+ARTICLE = ('<html><body><h1>One</h1><time>2026-09-05</time>'
+           '<p>%s</p></body></html>' % ("Body text here. " * 40))
+
+
+def test_an_empty_listing_is_asked_again_patiently(monkeypatch):
+    monkeypatch.setattr(config, "REQUEST_DELAY", 0)
+    browser = ListingBrowser([EMPTY, ROWS, ARTICLE])
+    build(browser, FakeClient(LINKS, LINKS, FIELDS), BASE, None, (), (), ())
+    assert browser.calls[0] == (BASE, False)
+    assert browser.calls[1] == (BASE, True)
+
+
+def test_a_listing_that_yields_links_is_not_asked_twice(monkeypatch):
+    monkeypatch.setattr(config, "REQUEST_DELAY", 0)
+    browser = ListingBrowser([ROWS, ARTICLE])
+    build(browser, FakeClient(LINKS, FIELDS), BASE, None, (), (), ())
+    assert browser.calls[0] == (BASE, False)
+    assert browser.calls[1][0] == "https://site.test/read/one"
