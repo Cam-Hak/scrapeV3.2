@@ -188,3 +188,29 @@ def test_an_article_that_parses_is_not_fetched_twice():
              date(2026, 9, 1), "lede", (), (), ())
     assert [c for c in browser.calls if c[0] == "https://site.test/a"] == [
         ("https://site.test/a", False)]
+
+MANY = ('<html><body><a class="post" href="/a">One</a>'
+        '<a class="post" href="/b">Two</a>'
+        '<a class="post" href="/c">Three</a></body></html>')
+
+
+def test_every_link_is_fetched_when_no_cap_is_given():
+    browser = ListingBrowser([MANY, ARTICLE])
+    # a cutoff ahead of the article date keeps the run off the database
+    run_site(browser, None, 101, "https://site.test/news", listing_recipe(),
+             date(2026, 9, 10), "lede", (), (), ())
+    assert len(browser.calls) == 4
+
+
+def test_max_articles_caps_the_links_that_are_fetched():
+    browser = ListingBrowser([MANY, ARTICLE])
+    run_site(browser, None, 101, "https://site.test/news", listing_recipe(),
+             date(2026, 9, 10), "lede", (), (), (), 2)
+    assert len(browser.calls) == 3
+
+
+def test_the_reported_link_count_is_the_full_listing_not_the_cap():
+    browser = ListingBrowser([MANY, ARTICLE])
+    result = run_site(browser, None, 101, "https://site.test/news", listing_recipe(),
+                      date(2026, 9, 10), "lede", (), (), (), 2)
+    assert result.found == 3

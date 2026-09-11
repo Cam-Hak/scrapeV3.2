@@ -21,7 +21,7 @@ def log(msg):
     print(msg + "\n", end="", flush=True)  # one write so threads can't interleave inside a line
 
 
-def scrape_site(browser, conn, a_id, url, recipe, cutoff, lede, drop, drop_title, prune, lines):
+def scrape_site(browser, conn, a_id, url, recipe, cutoff, lede, drop, drop_title, prune, lines, cap=None):
     listing = browser.get(url)
     rows = find_items(listing, url, recipe)
     if not rows:
@@ -33,6 +33,10 @@ def scrape_site(browser, conn, a_id, url, recipe, cutoff, lede, drop, drop_title
     if recipe.date_on_listing and set_dayfirst(recipe, [BeautifulSoup(listing, "html.parser")]):
         lines.append("  numeric dates read %s first -- recipe flag corrected" % ("day" if recipe.dayfirst else "month"))
     lines.append("  listing -> %d links" % len(rows))
+    found = len(rows)
+    if cap:
+        rows = rows[:cap]
+        lines.append("  limited to the first %d article(s)" % cap)
     extracted = stored = duplicates = stale = repeated = 0
     previous = None
     problems = []
@@ -76,20 +80,20 @@ def scrape_site(browser, conn, a_id, url, recipe, cutoff, lede, drop, drop_title
         previous = _norm(item["headline"])
     if repeated:
         problems.append("%d repeated headline(s) -- selector may be a banner" % repeated)
-    return len(rows), extracted, stored, duplicates, problems
+    return found, extracted, stored, duplicates, problems
 
 
 Result = namedtuple("Result", "a_id found parsed stored dupes problems error lines")
 
 
-def run_site(browser, conn, a_id, url, recipe, cutoff, lede, drop, drop_title, prune):
+def run_site(browser, conn, a_id, url, recipe, cutoff, lede, drop, drop_title, prune, cap=None):
     log("  -> %s %s" % (a_id, url))  # one interleaved line so a long run shows what is in flight
     begun = time.time()
     head = ["", "%s %s" % (a_id, url)]
     lines = [] if lede else ["  no lede -- the body will open with TKTK placeholders"]
     try:
         found, parsed, stored, dupes, problems = scrape_site(
-            browser, conn, a_id, url, recipe, cutoff, lede, drop, drop_title, prune, lines)
+            browser, conn, a_id, url, recipe, cutoff, lede, drop, drop_title, prune, lines, cap)
     except Exception as e:
         why = "%s: %s" % (type(e).__name__, e)
         return Result(a_id, 0, 0, 0, 0, [], why, head + lines + ["  ERROR " + why])
@@ -160,6 +164,7 @@ def main():
     ap.add_argument("--last", type=int)
     ap.add_argument("--limit", type=int)
     ap.add_argument("--workers", type=int, default=config.WORKERS)
+    ap.add_argument("--max-articles", type=int)
     args = ap.parse_args()
     cutoff = date.today() - timedelta(days=args.days)
     sites = load_sites(config.SITES_CSV, args.id, args.start, args.limit, args.last)
@@ -196,7 +201,7 @@ def main():
             report.no_lede()
         ready.append((a_id, url, recipe, cutoff, lede,
                       patterns_for(strips, a_id), patterns_for(strips, a_id, "title"),
-                      patterns_for(strips, a_id, "prune")))
+                      patterns_for(strips, a_id, "prune"), args.max_articles))
     for group in by_host(ready):
         jobs.put(group)
 
