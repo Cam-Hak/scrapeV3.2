@@ -236,6 +236,18 @@ def show_sample(item, lede, link):
         log("  | %s" % line[:86])
 
 
+def drop_rows(path, ids):
+    # matching on the raw line keeps every row we are not dropping byte for byte
+    try:
+        lines = open(path, encoding="utf-8").readlines()
+    except FileNotFoundError:
+        return 0
+    kept = [l for l in lines if l.split(",")[0].strip() not in ids]
+    if len(kept) != len(lines):
+        open(path, "w", encoding="utf-8").writelines(kept)
+    return len(lines) - len(kept)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--id", type=int, nargs="+")
@@ -243,13 +255,26 @@ def main():
     ap.add_argument("--last", type=int)
     ap.add_argument("--limit", type=int)
     ap.add_argument("--force", action="store_true")
+    ap.add_argument("--remove", action="store_true")
     args = ap.parse_args()
     sites = load_sites(config.SITES_CSV, args.id, args.start, args.limit, args.last)
     if not sites:
         print("no matching sites")
         return
+    # with no selector every site is picked, which would wipe the whole table
+    if args.remove and not (args.id or args.start or args.last or args.limit):
+        print("--remove needs --id, --from, --last or --limit")
+        return
 
     store = Store(config.SQLITE_PATH, config.MAX_FAILURES)
+    if args.remove:
+        for a_id, url in sites:
+            log("%s %s" % (a_id, "recipe removed" if store.remove_recipe(a_id) else "had no recipe"))
+        ids = {str(a_id) for a_id, url in sites}
+        for path in (config.SITES_CSV, config.STRIP_CSV):
+            log("%s: %d line(s) dropped" % (path, drop_rows(path, ids)))
+        store.close()
+        return
     ledes = load_ledes(config.LEDES_CSV)
     strips = load_strips(config.STRIP_CSV)
     client = make_client()

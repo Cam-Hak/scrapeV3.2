@@ -34,6 +34,12 @@ class Store:
         )
         self.db.commit()
 
+    def remove_recipe(self, a_id):
+        gone = self.db.execute("DELETE FROM recipe WHERE a_id = ?", (a_id,)).rowcount
+        self.db.execute("DELETE FROM failure WHERE a_id = ?", (a_id,))
+        self.db.commit()
+        return gone > 0
+
     def record_result(self, a_id, ok):
         streak = 0 if ok else self._streak(a_id) + 1
         self.db.execute("REPLACE INTO failure (a_id, streak) VALUES (?, ?)", (a_id, streak))

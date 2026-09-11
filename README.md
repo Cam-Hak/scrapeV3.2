@@ -58,6 +58,7 @@ half-written, so it can take a minute; you still get the summary.
 | Flag | Effect |
 |---|---|
 | `--force` | Rebuild recipes that already exist, instead of skipping them |
+| `--remove` | Drop the selected sites everywhere and exit, building nothing: their recipe and failure streak in `recipes.db`, their row in `test-sites.csv`, and their rows in `strip.csv`. Needs one of the four selectors above; it refuses to run against the whole file. `ledes.csv` is left alone, because its entries span several lines. |
 
 ## Running on a Linux server
 
