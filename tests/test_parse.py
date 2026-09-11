@@ -3,7 +3,7 @@ from datetime import date, datetime, timedelta
 from bs4 import BeautifulSoup
 
 from scraper.parse import (_article_text, _date, _dateline, _parse_date, _relative,
-                           find_items)
+                           find_items, find_links)
 from scraper.recipe import Recipe
 
 NOW = datetime(2026, 9, 4, 12, 0)
@@ -189,3 +189,26 @@ def test_a_byline_date_element_is_read_through_the_contact_details():
 
 def test_text_with_no_date_is_still_rejected():
     assert _parse_date("Kaylyn Groves | 202-296-2296 | kaylyn@arl.org") is None
+
+
+DOCS = """
+<div class="row"><a href="/read/one">One</a></div>
+<div class="row"><a href="/files/report.PDF">Report</a></div>
+<div class="row"><a href="/files/sheet.xlsx?v=2">Sheet</a></div>
+"""
+
+
+def doc_recipe():
+    return Recipe(link_selector="a", url_filter="", headline_selector="", date_selector="")
+
+
+def test_document_links_are_never_returned_as_articles():
+    assert find_links(DOCS, "https://site.test/n", doc_recipe()) == [
+        "https://site.test/read/one"]
+
+
+def test_document_rows_are_never_returned_as_articles():
+    r = doc_recipe()
+    r.item_selector = ".row"
+    assert [i["url"] for i in find_items(DOCS, "https://site.test/n", r)] == [
+        "https://site.test/read/one"]

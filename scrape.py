@@ -41,6 +41,10 @@ def scrape_site(browser, conn, a_id, url, recipe, cutoff, lede, drop, drop_title
         tag = "  [%d/%d]" % (i, len(rows))
         item = extract(browser.get(link), recipe, drop, link, row, drop_title, prune)
         if not item:
+            # js-built articles land after the page loads, same as the listing above
+            item = extract(browser.get(link, patient=True), recipe, drop, link, row,
+                           drop_title, prune)
+        if not item:
             lines.append("%s no headline, date or body -- skipped" % tag)
             continue
         extracted += 1

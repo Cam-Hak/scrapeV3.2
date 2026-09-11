@@ -365,4 +365,17 @@ reshape the recipe, and do not add fields to `Recipe`.
   the url.
 - **Articles that are PDFs.**
 
-Report which one you hit, and what you tried. That is the finished answer.
+Name which limit you hit, and what you tried.
+
+## 11. What to write in chat
+
+The whole reply is these two sections, in this order.
+
+**What happened.** A few plain sentences. How many sites you did, and anything a
+reader would not guess: a date that had to come off the article page instead of
+the listing, a `strip.csv` line and the reason for it, a listing that only holds
+three articles. Common words, few selector names. Leave out the sites that went
+the ordinary way.
+
+**Sites that did not work.** One line each: the id, the site, and which limit
+from step 10 you hit. Drop the whole section when every site passed.

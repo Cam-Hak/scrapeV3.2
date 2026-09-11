@@ -31,6 +31,8 @@ CLOCK = re.compile(r"[\s,|·-]*(?:at\s+)?\d{1,2}[:.]\d{2}\s*(?:[ap]\.?m\.?)?"
 DAY_WORD = re.compile(r"\b(today|yesterday|just now)\b[\s.,|·-]*$")
 URL_DATE = re.compile(r"/(20\d{2})/(\d{1,2})/(\d{1,2})(?:/|-|_|$)")
 MD_ESCAPE = re.compile(r"\\([^\w\s])")
+# trafilatura reads none of these, so a link to one is a fetch that cannot produce a body
+DOCUMENT = (".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".zip")
 WIDGET_ROOTS = ("CybotCookiebotDialog", "onetrust-consent-sdk", "usercentrics-root",
                 "truste-consent-track", "qc-cmp2-container", "touchpoints-form-", "fba-")
 # a consent dialog or feedback form outweighs a short article, and trafilatura returns it instead
@@ -49,6 +51,8 @@ def find_links(html, base_url, recipe):
         if not url.startswith(("http://", "https://")):
             continue
         if recipe.url_filter and recipe.url_filter not in url:
+            continue
+        if _is_document(url):
             continue
         if url not in urls:
             urls.append(url)
@@ -74,6 +78,8 @@ def find_items(html, base_url, recipe):
         if not url.startswith(("http://", "https://")) or url in seen:
             continue
         if recipe.url_filter and recipe.url_filter not in url:
+            continue
+        if _is_document(url):
             continue
         seen.add(url)
         items.append({
@@ -163,6 +169,10 @@ def _article_text(html, prune=()):
     # these pages wrap releases in a table, and cells render inline unless ignored
     reader.ignore_tables = True
     return MD_ESCAPE.sub(r"\1", reader.handle(inner))
+
+
+def _is_document(url):
+    return url.split("?")[0].lower().endswith(DOCUMENT)
 
 
 def _select(soup, selector):

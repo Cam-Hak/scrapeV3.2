@@ -172,3 +172,19 @@ def test_a_listing_that_yields_links_is_not_fetched_twice():
              date(2026, 9, 1), "lede", (), (), ())
     assert browser.calls[0] == ("https://site.test/news", False)
     assert browser.calls[1][0] == "https://site.test/a"
+
+
+def test_an_empty_article_is_fetched_again_patiently():
+    browser = ListingBrowser([LISTING, "<html><body></body></html>", ARTICLE])
+    run_site(browser, None, 101, "https://site.test/news", listing_recipe(),
+             date(2026, 9, 1), "lede", (), (), ())
+    assert browser.calls[1] == ("https://site.test/a", False)
+    assert browser.calls[2] == ("https://site.test/a", True)
+
+
+def test_an_article_that_parses_is_not_fetched_twice():
+    browser = ListingBrowser([LISTING, ARTICLE])
+    run_site(browser, None, 101, "https://site.test/news", listing_recipe(),
+             date(2026, 9, 1), "lede", (), (), ())
+    assert [c for c in browser.calls if c[0] == "https://site.test/a"] == [
+        ("https://site.test/a", False)]
