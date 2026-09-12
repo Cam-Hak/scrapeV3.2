@@ -214,3 +214,44 @@ def test_the_reported_link_count_is_the_full_listing_not_the_cap():
     result = run_site(browser, None, 101, "https://site.test/news", listing_recipe(),
                       date(2026, 9, 10), "lede", (), (), (), 2)
     assert result.found == 3
+
+
+def test_drain_gives_up_on_a_worker_that_never_finishes():
+    # a page load can block with no timeout of its own, so the drain has to be
+    # able to walk away from a worker that will never report
+    results = queue.Queue()
+    stop_it = threading.Event()
+
+    def never_finishes():
+        stop_it.wait(30)  # stands in for a wedged sb.open()
+
+    threads = [threading.Thread(target=never_finishes, daemon=True)]
+    for t in threads:
+        t.start()
+
+    store, report = FakeStore(), FakeReport()
+    began = time.time()
+    drain(threads, results, store, report, None, stall_limit=1)
+    elapsed = time.time() - began
+    stop_it.set()
+
+    assert elapsed < 10  # returned on the stall limit, not when the worker ended
+    assert store.results == []
+
+
+def test_drain_still_waits_while_results_keep_arriving():
+    # the stall guard must not cut off a slow but healthy run
+    results = queue.Queue()
+
+    def trickles():
+        for a_id in (1, 2, 3):
+            time.sleep(0.4)
+            results.put(result(a_id=a_id))
+
+    threads = [threading.Thread(target=trickles, daemon=True)]
+    for t in threads:
+        t.start()
+
+    store, report = FakeStore(), FakeReport()
+    drain(threads, results, store, report, None, stall_limit=2)
+    assert sorted(store.results) == [(1, True), (2, True), (3, True)]

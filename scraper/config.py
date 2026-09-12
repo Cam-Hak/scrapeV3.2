@@ -34,3 +34,14 @@ HEADLESS = False
 
 STOP_AFTER_OLD = 3
 STRIP_CSV = "strip.csv"
+
+# run history, written next to recipes.db -- see scraper/history.py
+RUNS_LOG = "runs.jsonl"
+RUN_SITES_LOG = "run_sites.jsonl"
+
+# give up when no worker has finished a site in this long -- a page load has
+# no timeout of its own, so one unresponsive site can otherwise hang the run
+STALL_LIMIT = 600
+
+# hard ceiling on one site when each runs in its own process (scraper/isolate.py)
+SITE_TIMEOUT = 180

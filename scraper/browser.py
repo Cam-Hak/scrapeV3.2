@@ -38,8 +38,11 @@ def wait_for(last, now, delay):
 
 
 class Browser:
-    def __init__(self, headless=HEADLESS):
+    def __init__(self, headless=HEADLESS, user_data_dir=None):
         self.headless = headless
+        # Chrome writes a fresh profile per launch and can leave a GB behind. When
+        # the caller owns the directory it can delete it even if we are killed.
+        self.user_data_dir = user_data_dir
         self.sb = None
         self.last = None
 
@@ -60,7 +63,13 @@ class Browser:
             time.sleep(pause)
         self.last = time.time()
         if self.sb is None:
-            self.sb = sb_cdp.Chrome(url, headless=self.headless, browser_args=OFFSCREEN)
+            # OFFSCREEN is None off Windows, and browser_args=None is what this
+            # passed before -- keep that when there is nothing to add
+            args = list(OFFSCREEN or [])
+            if self.user_data_dir:
+                args.append("--user-data-dir=%s" % self.user_data_dir)
+            self.sb = sb_cdp.Chrome(url, headless=self.headless,
+                                    browser_args=args or None)
         else:
             self.sb.open(url)
         self._settle(patient)

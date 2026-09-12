@@ -9,3 +9,12 @@ db/*.dmp.sql
 # run-log artifacts from the verification checklist
 baseline.txt
 after.txt
+
+# chrome crash dumps and seleniumbase download artifacts
+core.*
+downloaded_files/
+
+# run output -- logs and the per-run history are local to the machine that ran it
+*.log
+runs.jsonl
+run_sites.jsonl
