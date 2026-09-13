@@ -9,6 +9,8 @@ from bs4 import BeautifulSoup
 
 from scraper import articles, config
 from scraper.browser import Browser
+from scraper.history import ERROR, OK, SKIPPED, STALE, History
+from scraper.isolate import run_site_isolated, sweep_profiles
 from scraper.lede import footer, load_ledes, render
 from scraper.parse import _norm, extract, find_items, set_dayfirst
 from scraper.report import Report
@@ -102,10 +104,11 @@ def run_site(browser, conn, a_id, url, recipe, cutoff, lede, drop, drop_title, p
     return Result(a_id, found, parsed, stored, dupes, problems, None, head + lines)
 
 
-def absorb(r, store, report):
+def absorb(r, store, report, history=None):
     if r.error:
         store.record_result(r.a_id, False)
         report.error(r.a_id, r.error)
+        state = ERROR
     else:
         # links but nothing parsed means the selectors have gone stale
         healthy = r.found > 0 and r.parsed > 0
@@ -115,11 +118,28 @@ def absorb(r, store, report):
             report.problem(r.a_id, "found=%s parsed=0" % r.found)
         for problem in r.problems:
             report.problem(r.a_id, problem)
+        state = OK if healthy else STALE
+    if history:
+        history.site(r.a_id, state, r.found, r.parsed, r.stored, r.dupes,
+                     r.error or "", r.problems)
     log("\n".join(r.lines))
 
 
-def worker(jobs, results):
+def worker(jobs, results, site_timeout=None):
     try:
+        if site_timeout:
+            # Isolated: each site runs in its own process with a hard timeout, so
+            # a page load that never returns costs one site instead of holding
+            # this worker for the rest of the run. Nothing blocking is done here,
+            # so this loop cannot wedge.
+            while True:
+                try:
+                    group = jobs.get_nowait()
+                except queue.Empty:
+                    return
+                for job in group:
+                    results.put(Result(**run_site_isolated(job, site_timeout)))
+            return
         with Browser() as browser:
             conn = articles.connect()
             try:
@@ -132,7 +152,12 @@ def worker(jobs, results):
                         results.put(run_site(browser, conn, *job))
             finally:
                 conn.close()
-    except Exception as e:
+    except BaseException as e:
+        # BaseException, not Exception: an import inside seleniumbase can raise
+        # SystemExit, which slips past every `except Exception` above and kills
+        # the thread silently -- the run then reports "0 ran, 0 errored" and
+        # gives no clue why. A worker thread never receives KeyboardInterrupt
+        # (that goes to the main thread), so widening this costs nothing.
         log("worker stopped: %s: %s" % (type(e).__name__, e))
 
 
@@ -145,14 +170,25 @@ def stop(jobs):
             return dropped
 
 
-def drain(threads, results, store, report):
+def drain(threads, results, store, report, history=None, stall_limit=None):
     # a worker that dies must not hang the drain, so watch the threads rather than a count
+    last = time.time()
     while any(t.is_alive() for t in threads) or not results.empty():
         try:
             r = results.get(timeout=0.5)
         except queue.Empty:
+            # A page load has no timeout of its own, and a blocked call raises
+            # nothing for run_site to catch -- so one unresponsive site can hold
+            # its worker forever. When every worker has gone quiet this long,
+            # give up on them rather than let the whole run hang.
+            if stall_limit and time.time() - last > stall_limit:
+                stuck = sum(1 for t in threads if t.is_alive())
+                log("  nothing has finished in %ds -- abandoning %d stuck worker(s)"
+                    % (stall_limit, stuck))
+                return
             continue
-        absorb(r, store, report)
+        last = time.time()
+        absorb(r, store, report, history)
 
 
 def main():
@@ -165,6 +201,13 @@ def main():
     ap.add_argument("--limit", type=int)
     ap.add_argument("--workers", type=int, default=config.WORKERS)
     ap.add_argument("--max-articles", type=int)
+    ap.add_argument("--stall-limit", type=int, default=config.STALL_LIMIT,
+                    help="give up when no site has finished in this many seconds (0 = never)")
+    ap.add_argument("--site-timeout", type=int, default=config.SITE_TIMEOUT,
+                    help="kill a site that has not finished in this many seconds")
+    ap.add_argument("--in-process", action="store_true",
+                    help="run sites in this process instead of isolating each one"
+                         " -- faster, but one unresponsive site hangs its worker")
     args = ap.parse_args()
     cutoff = date.today() - timedelta(days=args.days)
     sites = load_sites(config.SITES_CSV, args.id, args.start, args.limit, args.last)
@@ -173,6 +216,7 @@ def main():
         return
 
     store = Store(config.SQLITE_PATH, config.MAX_FAILURES)
+    history = History(runs=config.RUNS_LOG, sites=config.RUN_SITES_LOG)
     if args.retry_failed:
         store.clear_failures()
     ledes = load_ledes(config.LEDES_CSV)
@@ -189,12 +233,14 @@ def main():
             log("%s %s" % (a_id, url))
             log("  no recipe -- run build_recipes.py --id %s" % a_id)
             report.skip(a_id, "no recipe")
+            history.site(a_id, SKIPPED, error="no recipe")
             continue
         if store.is_failed(a_id):
             log("")
             log("%s %s" % (a_id, url))
             log("  marked failed, skipping -- use --retry-failed")
             report.skip(a_id, "marked failed, skipped")
+            history.site(a_id, SKIPPED, error="marked failed")
             continue
         lede = ledes.get(a_id)
         if not lede:
@@ -206,24 +252,36 @@ def main():
         jobs.put(group)
 
     results = queue.Queue()
-    threads = [threading.Thread(target=worker, args=(jobs, results))
+    # daemon: a worker wedged inside a page load can never be joined, and a
+    # non-daemon thread would keep the process alive after the summary printed
+    site_timeout = 0 if args.in_process else args.site_timeout
+    if site_timeout:
+        # a killed Chrome never removes its profile, and they run to hundreds of
+        # MB -- a previous run's leftovers would otherwise fill the disk
+        swept = sweep_profiles()
+        if swept:
+            log("cleared %d stale browser profile(s) from a previous run" % swept)
+    threads = [threading.Thread(target=worker, args=(jobs, results, site_timeout), daemon=True)
                for _ in range(max(1, args.workers))]
     for t in threads:
         t.start()
         time.sleep(1)  # Chrome launch is the one thing several workers must not do at once
     try:
-        drain(threads, results, store, report)
+        drain(threads, results, store, report, history, args.stall_limit)
     except KeyboardInterrupt:
         log("interrupted -- letting workers finish their current group, then stopping")
         for job in stop(jobs):
             report.skip(job[0], "not run -- interrupted")
-        drain(threads, results, store, report)
+            history.site(job[0], SKIPPED, error="not run -- interrupted")
+        drain(threads, results, store, report, history, args.stall_limit)
     finally:
         stop(jobs)
         for t in threads:
-            t.join()
+            # bounded: a wedged worker would never return from join()
+            t.join(timeout=5)
 
     store.close()
+    history.finish(report, days=args.days, workers=args.workers)
     log("")
     for line in report.lines():
         log(line)

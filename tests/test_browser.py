@@ -165,3 +165,34 @@ def test_a_patient_settle_still_gives_up_on_a_page_that_never_stops_growing():
     naps = []
     settled(lambda: next(sizes), naps.append, stable=30, polls=PATIENT_POLLS)
     assert len(naps) == PATIENT_POLLS
+
+
+def test_browser_args_survive_offscreen_being_none(monkeypatch):
+    # OFFSCREEN is None off Windows; building args from it must not explode, and
+    # with nothing to add the call should pass None exactly as it always did
+    import scraper.browser as b
+
+    seen = {}
+
+    class FakeChrome:
+        def __init__(self, url, headless=False, browser_args=None):
+            seen["args"] = browser_args
+
+        def sleep(self, *a, **k):
+            pass
+
+        def evaluate(self, *a, **k):
+            return 10
+
+        def get_html(self):
+            return "<html></html>"
+
+    monkeypatch.setattr(b, "OFFSCREEN", None)
+    monkeypatch.setattr(b.sb_cdp, "Chrome", FakeChrome)
+    monkeypatch.setattr(b, "settled", lambda *a, **k: None)
+
+    b.Browser().get("https://site.test")
+    assert seen["args"] is None
+
+    b.Browser(user_data_dir="/tmp/profile_x").get("https://site.test")
+    assert seen["args"] == ["--user-data-dir=/tmp/profile_x"]
