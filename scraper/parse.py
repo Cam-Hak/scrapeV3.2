@@ -111,8 +111,7 @@ def extract(html, recipe, drop=(), url=None, listing=None, drop_title=(), prune=
         date = _url_date(url)
     if not headline or not date or not raw:
         return None
-    body, contact = clean_body(raw, headline, date,
-                               list(recipe.boilerplate) + list(drop))
+    body, contact = clean_body(raw, headline, date, drop, recipe.boilerplate)
     if not body:
         return None
     # the title is cut last: clean_body drops the page's own title line by

@@ -19,16 +19,22 @@ SOCIAL = re.compile(r"^(%s)(\s*[|/,]\s*(%s))+$" % (PLATFORM, PLATFORM), re.I)
 FOLLOW = re.compile(r"^(follow|connect with|stay connected|subscribe)\b", re.I)
 KICKER_LIMIT = 60
 MAX_KICKERS = 2
+# table cells and labels repeat for real; a repeated sentence this long never does
+REPEAT_MIN = 80
 
 
-def clean(text, headline, date, drop=()):
+def clean(text, headline, date, drop=(), boilerplate=()):
     lines = [NOISE.sub("", l).strip() for l in text.split("\n")]
     lines = [MD_QUOTE.sub("", MD_HEADING.sub("", l)) for l in lines]
     lines = [l for l in lines if l and l != "|" and not HRULE.match(l)]
     lines = [l for l in lines if not _dropped(l, drop)]
+    # learned boilerplate is whole lines, so a line must equal one, not merely contain it
+    known = {_norm(b) for b in boilerplate} - {""}
+    lines = [l for l in lines if _norm(l) not in known]
     lines = [l for l in lines if not SOCIAL.match(l) and not FOLLOW.match(l)]
     # a page's embedded search index renders as one long line of JSON, never as prose
     lines = [l for l in lines if not DATA_BLOB.match(l)]
+    lines = _drop_repeats(lines)
     lines = _drop_head(lines, headline, date)
     lines = _drop_footnotes(lines)
     lines, contact = _split_contact(lines)
@@ -43,6 +49,17 @@ def _norm(s):
 def _dropped(line, drop):
     key = _norm(line)
     return any(_norm(p) and _norm(p) in key for p in drop)
+
+
+def _drop_repeats(lines):
+    # trafilatura can emit a paragraph twice when the page splits it with <br> tags
+    seen, kept = set(), []
+    for line in lines:
+        if len(line) >= REPEAT_MIN and line in seen:
+            continue
+        seen.add(line)
+        kept.append(line)
+    return kept
 
 
 def _drop_head(lines, headline, date):
