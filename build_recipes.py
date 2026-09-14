@@ -3,9 +3,9 @@ import time
 
 from bs4 import BeautifulSoup
 
-from scraper import config
+from scraper import articles, config
 from scraper.browser import Browser
-from scraper.lede import footer, load_ledes, render
+from scraper.lede import document
 from scraper.llm import (SKELETON_LIMIT, field_recipe, link_recipe, make_client,
                          skeleton)
 from scraper.parse import _date, _norm, _text, extract, find_items, set_dayfirst
@@ -221,7 +221,7 @@ def learn_boilerplate(bodies):
 
 
 def show_sample(item, lede, link):
-    body = "\n\n".join([render(lede, item["date"]), item["body"], footer(link)])
+    body = document(lede, item["headline"], item["body"], item["date"], link)
     lines = [l for l in body.split("\n") if l.strip()]
     log("  --- sample record ---")
     log("  headline: %s" % item["headline"][:72])
@@ -275,7 +275,10 @@ def main():
             log("%s: %d line(s) dropped" % (path, drop_rows(path, ids)))
         store.close()
         return
-    ledes = load_ledes(config.LEDES_CSV)
+    conn = articles.connect()
+    ledes = {a: lede for a, (_, lede) in
+             articles.load_agencies(conn, [a_id for a_id, _ in sites]).items()}
+    conn.close()
     strips = load_strips(config.STRIP_CSV)
     client = make_client()
     started = time.time()

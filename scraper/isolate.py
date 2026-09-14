@@ -62,9 +62,9 @@ def sweep_profiles(older_than=900):
 
 def run_site_isolated(job, timeout, cwd=None):
     """Returns the same dict shape run_site's Result carries."""
-    a_id, url, recipe, cutoff, _lede, _drop, _title, _prune, cap = job
+    a_id, url, recipe, cutoff, agency, _drop, _title, _prune, cap = job
     payload = json.dumps({"a_id": a_id, "url": url, "recipe": recipe.to_json(),
-                          "cutoff": cutoff.isoformat(), "cap": cap})
+                          "cutoff": cutoff.isoformat(), "agency": list(agency), "cap": cap})
     proc = subprocess.Popen(
         [sys.executable, "-m", "scraper.isolate"],
         stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
@@ -101,15 +101,13 @@ def _child():
     from scrape import run_site
     from scraper import articles, config
     from scraper.browser import Browser
-    from scraper.lede import load_ledes
     from scraper.recipe import Recipe
     from scraper.strip import load_strips, patterns_for
 
     data = json.loads(sys.stdin.read())
     a_id = data["a_id"]
-    # rebuilt from the csvs rather than passed in, so nothing here depends on
+    # rebuilt from the csv rather than passed in, so nothing here depends on
     # the parent serialising compiled patterns correctly
-    ledes = load_ledes(config.LEDES_CSV)
     strips = load_strips(config.STRIP_CSV)
 
     with Browser() as browser:
@@ -117,7 +115,7 @@ def _child():
         try:
             result = run_site(
                 browser, conn, a_id, data["url"], Recipe.from_json(data["recipe"]),
-                date.fromisoformat(data["cutoff"]), ledes.get(a_id),
+                date.fromisoformat(data["cutoff"]), tuple(data["agency"]),
                 patterns_for(strips, a_id), patterns_for(strips, a_id, "title"),
                 patterns_for(strips, a_id, "prune"), data["cap"])
         finally:

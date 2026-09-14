@@ -9,6 +9,7 @@ CONTACT = re.compile(
 FOOTNOTE = re.compile(r"^\[\d+\]")
 HEADING = re.compile(r"^(footnotes?|notes|references?|endnotes?|citations?|sources?)$", re.I)
 NOISE = re.compile(r"\s*\(Opens in a new window\)", re.I)
+DATA_BLOB = re.compile(r'^\[?\s*\{\s*"')
 MD_HEADING = re.compile(r"^#{1,6}\s+")
 MD_QUOTE = re.compile(r"^>+\s*")
 HRULE = re.compile(r"^((\*\s*){3,}|-{3,}|_{3,})$")
@@ -26,6 +27,8 @@ def clean(text, headline, date, drop=()):
     lines = [l for l in lines if l and l != "|" and not HRULE.match(l)]
     lines = [l for l in lines if not _dropped(l, drop)]
     lines = [l for l in lines if not SOCIAL.match(l) and not FOLLOW.match(l)]
+    # a page's embedded search index renders as one long line of JSON, never as prose
+    lines = [l for l in lines if not DATA_BLOB.match(l)]
     lines = _drop_head(lines, headline, date)
     lines = _drop_footnotes(lines)
     lines, contact = _split_contact(lines)

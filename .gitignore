@@ -6,6 +6,10 @@ __pycache__/
 # production dumps, local only -- db/press_releases.sql is the schema and is kept
 db/*.dmp.sql
 
+# the old scraper, kept for reference -- its configs carry live db credentials
+original_scrape.zip
+scrape_prototype/
+
 # run-log artifacts from the verification checklist
 baseline.txt
 after.txt

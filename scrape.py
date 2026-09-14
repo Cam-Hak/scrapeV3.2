@@ -11,7 +11,7 @@ from scraper import articles, config
 from scraper.browser import Browser
 from scraper.history import ERROR, OK, SKIPPED, STALE, History
 from scraper.isolate import run_site_isolated, sweep_profiles
-from scraper.lede import footer, load_ledes, render
+from scraper.lede import document
 from scraper.parse import _norm, extract, find_items, set_dayfirst
 from scraper.report import Report
 from scraper.sites import by_host, load_sites
@@ -23,7 +23,7 @@ def log(msg):
     print(msg + "\n", end="", flush=True)  # one write so threads can't interleave inside a line
 
 
-def scrape_site(browser, conn, a_id, url, recipe, cutoff, lede, drop, drop_title, prune, lines, cap=None):
+def scrape_site(browser, conn, a_id, url, recipe, cutoff, agency, drop, drop_title, prune, lines, cap=None):
     listing = browser.get(url)
     rows = find_items(listing, url, recipe)
     if not rows:
@@ -63,9 +63,9 @@ def scrape_site(browser, conn, a_id, url, recipe, cutoff, lede, drop, drop_title
                 break
             continue
         stale = 0
-        body = "\n\n".join([render(lede, item["date"]), item["body"], footer(link)])
+        body = document(agency[1], item["headline"], item["body"], item["date"], link)
         ok, reason = articles.save_article(
-            conn, a_id, item["headline"], item["date"], body, item["contact"]
+            conn, a_id, agency[0], item["headline"], item["date"], body, item["contact"]
         )
         if ok:
             stored += 1
@@ -88,14 +88,14 @@ def scrape_site(browser, conn, a_id, url, recipe, cutoff, lede, drop, drop_title
 Result = namedtuple("Result", "a_id found parsed stored dupes problems error lines")
 
 
-def run_site(browser, conn, a_id, url, recipe, cutoff, lede, drop, drop_title, prune, cap=None):
+def run_site(browser, conn, a_id, url, recipe, cutoff, agency, drop, drop_title, prune, cap=None):
     log("  -> %s %s" % (a_id, url))  # one interleaved line so a long run shows what is in flight
     begun = time.time()
     head = ["", "%s %s" % (a_id, url)]
-    lines = [] if lede else ["  no lede -- the body will open with TKTK placeholders"]
+    lines = [] if agency[1] else ["  no lede -- the body opens with TKTK placeholders"]
     try:
         found, parsed, stored, dupes, problems = scrape_site(
-            browser, conn, a_id, url, recipe, cutoff, lede, drop, drop_title, prune, lines, cap)
+            browser, conn, a_id, url, recipe, cutoff, agency, drop, drop_title, prune, lines, cap)
     except Exception as e:
         why = "%s: %s" % (type(e).__name__, e)
         return Result(a_id, 0, 0, 0, 0, [], why, head + lines + ["  ERROR " + why])
@@ -205,6 +205,9 @@ def main():
                     help="give up when no site has finished in this many seconds (0 = never)")
     ap.add_argument("--site-timeout", type=int, default=config.SITE_TIMEOUT,
                     help="kill a site that has not finished in this many seconds")
+    ap.add_argument("--allow-missing-lede", action="store_true",
+                    help="run sites with no lede on their agencies row, filling the"
+                         " opening with TKTK placeholders -- for testing, not for loading")
     ap.add_argument("--in-process", action="store_true",
                     help="run sites in this process instead of isolating each one"
                          " -- faster, but one unresponsive site hangs its worker")
@@ -219,7 +222,9 @@ def main():
     history = History(runs=config.RUNS_LOG, sites=config.RUN_SITES_LOG)
     if args.retry_failed:
         store.clear_failures()
-    ledes = load_ledes(config.LEDES_CSV)
+    conn = articles.connect()
+    agencies = articles.load_agencies(conn, [a_id for a_id, _ in sites])
+    conn.close()
     strips = load_strips(config.STRIP_CSV)
     report = Report(cutoff, len(sites))
     log("%d site(s), keeping articles on or after %s" % (len(sites), cutoff))
@@ -242,10 +247,18 @@ def main():
             report.skip(a_id, "marked failed, skipped")
             history.site(a_id, SKIPPED, error="marked failed")
             continue
-        lede = ledes.get(a_id)
-        if not lede:
+        agency = agencies.get(a_id, ("", ""))
+        if not agency[1]:
             report.no_lede()
-        ready.append((a_id, url, recipe, cutoff, lede,
+            # without a lede the document cannot be built, so the rows would be unusable
+            if not args.allow_missing_lede:
+                log("")
+                log("%s %s" % (a_id, url))
+                log("  no lede on the agencies row -- use --allow-missing-lede to run anyway")
+                report.skip(a_id, "no lede")
+                history.site(a_id, SKIPPED, error="no lede")
+                continue
+        ready.append((a_id, url, recipe, cutoff, agency,
                       patterns_for(strips, a_id), patterns_for(strips, a_id, "title"),
                       patterns_for(strips, a_id, "prune"), args.max_articles))
     for group in by_host(ready):

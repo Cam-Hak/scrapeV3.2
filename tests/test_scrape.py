@@ -79,7 +79,7 @@ class RaisingBrowser:
 
 def test_run_site_reports_the_exception_with_zero_counts():
     r = run_site(RaisingBrowser(), None, 101, "https://site.test", None, date(2026, 1, 1),
-                 "lede", [], [], [])
+                 ("ABC", "lede"), [], [], [])
     assert r.a_id == 101
     assert r.found == r.parsed == r.stored == r.dupes == 0
     assert r.problems == []
@@ -104,7 +104,7 @@ def test_run_site_keeps_lines_from_before_a_mid_site_exception():
     listing_html = '<html><body><a href="https://site.test/a1">Article</a></body></html>'
     recipe = Recipe(link_selector="a", url_filter="", headline_selector="h1", date_selector="time")
     r = run_site(RaisesOnSecondGet(listing_html), None, 101, "https://site.test", recipe,
-                 date(2020, 1, 1), None, [], [], [])
+                 date(2020, 1, 1), ("ABC", ""), [], [], [])
     assert r.error is not None
     assert any("no lede" in line for line in r.lines)
     assert any("listing -> 1 links" in line for line in r.lines)
@@ -161,7 +161,7 @@ def listing_recipe():
 def test_an_empty_listing_is_fetched_again_patiently():
     browser = ListingBrowser(["<html><body></body></html>", LISTING, ARTICLE])
     run_site(browser, None, 101, "https://site.test/news", listing_recipe(),
-             date(2026, 9, 1), "lede", (), (), ())
+             date(2026, 9, 1), ("ABC", "lede"), (), (), ())
     assert browser.calls[0] == ("https://site.test/news", False)
     assert browser.calls[1] == ("https://site.test/news", True)
 
@@ -169,7 +169,7 @@ def test_an_empty_listing_is_fetched_again_patiently():
 def test_a_listing_that_yields_links_is_not_fetched_twice():
     browser = ListingBrowser([LISTING, ARTICLE])
     run_site(browser, None, 101, "https://site.test/news", listing_recipe(),
-             date(2026, 9, 1), "lede", (), (), ())
+             date(2026, 9, 1), ("ABC", "lede"), (), (), ())
     assert browser.calls[0] == ("https://site.test/news", False)
     assert browser.calls[1][0] == "https://site.test/a"
 
@@ -177,7 +177,7 @@ def test_a_listing_that_yields_links_is_not_fetched_twice():
 def test_an_empty_article_is_fetched_again_patiently():
     browser = ListingBrowser([LISTING, "<html><body></body></html>", ARTICLE])
     run_site(browser, None, 101, "https://site.test/news", listing_recipe(),
-             date(2026, 9, 1), "lede", (), (), ())
+             date(2026, 9, 1), ("ABC", "lede"), (), (), ())
     assert browser.calls[1] == ("https://site.test/a", False)
     assert browser.calls[2] == ("https://site.test/a", True)
 
@@ -185,7 +185,7 @@ def test_an_empty_article_is_fetched_again_patiently():
 def test_an_article_that_parses_is_not_fetched_twice():
     browser = ListingBrowser([LISTING, ARTICLE])
     run_site(browser, None, 101, "https://site.test/news", listing_recipe(),
-             date(2026, 9, 1), "lede", (), (), ())
+             date(2026, 9, 1), ("ABC", "lede"), (), (), ())
     assert [c for c in browser.calls if c[0] == "https://site.test/a"] == [
         ("https://site.test/a", False)]
 
@@ -198,21 +198,21 @@ def test_every_link_is_fetched_when_no_cap_is_given():
     browser = ListingBrowser([MANY, ARTICLE])
     # a cutoff ahead of the article date keeps the run off the database
     run_site(browser, None, 101, "https://site.test/news", listing_recipe(),
-             date(2026, 9, 10), "lede", (), (), ())
+             date(2026, 9, 10), ("ABC", "lede"), (), (), ())
     assert len(browser.calls) == 4
 
 
 def test_max_articles_caps_the_links_that_are_fetched():
     browser = ListingBrowser([MANY, ARTICLE])
     run_site(browser, None, 101, "https://site.test/news", listing_recipe(),
-             date(2026, 9, 10), "lede", (), (), (), 2)
+             date(2026, 9, 10), ("ABC", "lede"), (), (), (), 2)
     assert len(browser.calls) == 3
 
 
 def test_the_reported_link_count_is_the_full_listing_not_the_cap():
     browser = ListingBrowser([MANY, ARTICLE])
     result = run_site(browser, None, 101, "https://site.test/news", listing_recipe(),
-                      date(2026, 9, 10), "lede", (), (), (), 2)
+                      date(2026, 9, 10), ("ABC", "lede"), (), (), (), 2)
     assert result.found == 3
 
 

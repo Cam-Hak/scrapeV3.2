@@ -25,7 +25,6 @@ LLM_WORKSPACE_ID = os.environ.get("SCRAPER_LLM_WORKSPACE_ID")
 
 SQLITE_PATH = "recipes.db"
 SITES_CSV = "test-sites.csv"
-LEDES_CSV = "ledes.csv"
 REQUEST_DELAY = 2
 DEFAULT_DAYS = 3
 MAX_FAILURES = 3
