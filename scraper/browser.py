@@ -15,7 +15,7 @@ PATIENT_READS = 30
 SETTLE_POLLS = 40
 PATIENT_POLLS = 100
 SIZE = "document.documentElement.outerHTML.length"
-# parks the window off-screen when a run is headed, so it cannot steal focus
+# headless never clears Cloudflare, so run headed and park the window off-screen
 OFFSCREEN = (["--window-position=-3000,-3000", "--window-size=1400,1000"]
              if sys.platform == "win32" else None)
 

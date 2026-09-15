@@ -29,8 +29,7 @@ REQUEST_DELAY = 2
 DEFAULT_DAYS = 3
 MAX_FAILURES = 3
 WORKERS = 4
-# set SCRAPER_HEADLESS=0 to watch a run, or when a site stops clearing Cloudflare
-HEADLESS = os.environ.get("SCRAPER_HEADLESS", "1") != "0"
+HEADLESS = False
 
 STOP_AFTER_OLD = 3
 STRIP_CSV = "strip.csv"
