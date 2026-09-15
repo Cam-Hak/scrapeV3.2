@@ -90,13 +90,21 @@ url instead.
 
 ## Running on a Linux server
 
-Chrome has to run headed — headless is detectable — so a server with no display needs a virtual one. There is no code change for this:
+Runs are headless by default, so a server with no display needs nothing extra:
 
 ```bash
-xvfb-run python scrape.py --workers 6
+python scrape.py --workers 6
 ```
 
-Worker count is bounded by Chrome, not by Python. Each browser is roughly 300-500MB and bursts a core while rendering. **This section is untested; a human will verify it on the target server.**
+Headless used to be avoided because it was thought never to clear Cloudflare. That no
+longer holds: the sites in the queue load clean headless, with no challenge. If one starts
+failing, run it headed instead, which needs a virtual display:
+
+```bash
+SCRAPER_HEADLESS=0 xvfb-run python scrape.py --workers 6
+```
+
+Worker count is bounded by Chrome, not by Python. Each browser is roughly 300-500MB and bursts a core while rendering. **Headless was confirmed on Windows, not yet on the target server; the worker table is still untested.**
 
 | Server | Workers |
 |---|---|
