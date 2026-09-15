@@ -60,6 +60,34 @@ half-written, so it can take a minute; you still get the summary.
 | `--force` | Rebuild recipes that already exist, instead of skipping them |
 | `--remove` | Drop the selected sites everywhere and exit, building nothing: their recipe and failure streak in `recipes.db`, their row in `test-sites.csv`, and their rows in `strip.csv`. Needs one of the four selectors above; it refuses to run against the whole file. `ledes.csv` is left alone, because its entries span several lines. |
 
+## Keyword routing -- `keywords.csv`
+
+Every stored doc starts at status `D`. `keywords.csv` can drop it instead, or route it to an
+editor box and leave a note in the `headline2` column.
+
+| Column | Meaning |
+|---|---|
+| `field` | `body` or `headline` -- which text is searched |
+| `phrase` | literal text, never a regex |
+| `action` | `skip` drops the whole article, `E` and `W` set the status, blank only adds a comment |
+| `comment` | blank uses the standard wording, otherwise this exact text |
+| `marker` | routing code appended after the doc's url, read only on `body` + `E` rows |
+| `whole` | `y` when the phrase must stand as its own word |
+| `veto` | words that cancel the match, split on `~`, always matched whole-word |
+
+Checks run body `E`, body `W`, headline `E`, headline `W`, then the comment-only rows. The last
+check that matches wins the status and the comments accumulate, so a doc can carry several. A
+body under `MIN_WORDS` is dropped before any of this; one between `MIN_WORDS` and `SHORT_DOC` is
+stored as `W` with a `short doc` note.
+
+`honor roll` appears twice on purpose: in the body it drops the article, in the headline it only
+routes to `W`. That is why `field` is a column.
+
+Date-field keywords are **not** supported. The legacy scraper searched the raw scraped date
+string for section labels like `Commentary`; this one never keeps that string, because a date
+selector that returns a label parses as nothing and the date is taken from the dateline or the
+url instead.
+
 ## Running on a Linux server
 
 Chrome has to run headed — headless is detectable — so a server with no display needs a virtual one. There is no code change for this:

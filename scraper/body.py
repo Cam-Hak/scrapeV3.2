@@ -5,15 +5,18 @@ from dateutil import parser as dateparser
 CONTACT = re.compile(
     r"^(for (further|more|media|press)\b"
     r"|(media|press) (contact|enquiries|inquiries|queries)"
-    r"|contact:)", re.I)
+    r"|contact:"
+    # a heading line of its own, as in "Belmont University Media Contact"
+    r"|.{0,40}(media|press) contacts?:?$)", re.I)
 FOOTNOTE = re.compile(r"^\[\d+\]")
 HEADING = re.compile(r"^(footnotes?|notes|references?|endnotes?|citations?|sources?)$", re.I)
 NOISE = re.compile(r"\s*\(Opens in a new window\)", re.I)
 DATA_BLOB = re.compile(r'^\[?\s*\{\s*"')
 MD_HEADING = re.compile(r"^#{1,6}\s+")
 MD_QUOTE = re.compile(r"^>+\s*")
-HRULE = re.compile(r"^((\*\s*){3,}|-{3,}|_{3,})$")
-ENDMARK = re.compile(r"^(ends?|###|#\s+#(\s+#)?|-30-|\[ends\])$", re.I)
+# an empty heading renders as bare hashes; exactly ### is left for ENDMARK to read
+HRULE = re.compile(r"^((\*\s*){3,}|-{3,}|_{3,}|#{1,2}|#{4,})$")
+ENDMARK = re.compile(r"^[-~_*\s]*(ends?|###|#\s+#(\s+#)?|-30-|\[ends\])[-~_*\s]*$", re.I)
 PLATFORM = r"X|Twitter|Facebook|Instagram|LinkedIn|YouTube|Threads|TikTok|Flickr"
 SOCIAL = re.compile(r"^(%s)(\s*[|/,]\s*(%s))+$" % (PLATFORM, PLATFORM), re.I)
 FOLLOW = re.compile(r"^(follow|connect with|stay connected|subscribe)\b", re.I)
@@ -39,6 +42,7 @@ def clean(text, headline, date, drop=(), boilerplate=()):
     lines = _drop_footnotes(lines)
     lines, contact = _split_contact(lines)
     lines = _drop_after_end(lines)
+    lines = _drop_bare_tail(lines)
     return "\n\n".join(lines), contact
 
 
@@ -68,6 +72,9 @@ def _drop_head(lines, headline, date):
         if _norm(line) == key:
             lines = lines[i + 1:]
             break
+    # a page can print its title twice, as a heading and again as a summary line
+    while lines and _norm(lines[0]) == key:
+        lines = lines[1:]
     while lines and _is_date(lines[0], date):
         lines = lines[1:]
     dropped = 0
@@ -101,10 +108,18 @@ def _drop_footnotes(lines):
 
 
 def _split_contact(lines):
-    for i in range(max(0, len(lines) - 8), len(lines)):
+    # this takes a trailing block, so a release that opens on one must keep its body
+    for i in range(max(1, len(lines) - 8), len(lines)):
         if CONTACT.match(lines[i]):
             return lines[:i], "\n".join(lines[i:])
     return lines, None
+
+
+def _drop_bare_tail(lines):
+    # an empty heading renders as "####", and a release never ends on a line with no words
+    while lines and not any(c.isalnum() for c in lines[-1]):
+        lines = lines[:-1]
+    return lines
 
 
 def _drop_after_end(lines):

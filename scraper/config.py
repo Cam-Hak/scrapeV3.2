@@ -29,10 +29,18 @@ REQUEST_DELAY = 2
 DEFAULT_DAYS = 3
 MAX_FAILURES = 3
 WORKERS = 4
-HEADLESS = False
+# set SCRAPER_HEADLESS=0 to watch a run, or when a site stops clearing Cloudflare
+HEADLESS = os.environ.get("SCRAPER_HEADLESS", "1") != "0"
 
 STOP_AFTER_OLD = 3
 STRIP_CSV = "strip.csv"
+KEYWORDS_CSV = "keywords.csv"
+
+# a date further ahead than this is a parse error, not a scheduled release
+MAX_DAYS_AHEAD = 7
+# legacy reads "this many words or fewer: don't load", so the short band starts one above
+MIN_WORDS = 100
+SHORT_DOC = 150
 
 # run history, written next to recipes.db -- see scraper/history.py
 RUNS_LOG = "runs.jsonl"
