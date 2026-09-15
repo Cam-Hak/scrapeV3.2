@@ -26,11 +26,12 @@ from datetime import date
 # marked rather than assumed to be the last thing printed
 MARKER = "@@RESULT@@"
 
-FIELDS = ("a_id", "found", "parsed", "stored", "dupes", "problems", "error", "lines")
+FIELDS = ("a_id", "found", "parsed", "stored", "dupes", "drops", "problems", "error",
+          "lines")
 
 
 def _blank(a_id, url, error, note):
-    return dict(a_id=a_id, found=0, parsed=0, stored=0, dupes=0, problems=[],
+    return dict(a_id=a_id, found=0, parsed=0, stored=0, dupes=0, drops={}, problems=[],
                 error=error, lines=["", "%s %s" % (a_id, url), "  " + note])
 
 
@@ -99,7 +100,7 @@ def _child():
     # imported here: scrape imports this module, so importing it at the top
     # would be circular
     from scrape import run_site
-    from scraper import articles, config
+    from scraper import articles, config, keywords
     from scraper.browser import Browser
     from scraper.recipe import Recipe
     from scraper.strip import load_strips, patterns_for
@@ -109,6 +110,7 @@ def _child():
     # rebuilt from the csv rather than passed in, so nothing here depends on
     # the parent serialising compiled patterns correctly
     strips = load_strips(config.STRIP_CSV)
+    keywords.load(config.KEYWORDS_CSV)
 
     with Browser() as browser:
         conn = articles.connect()

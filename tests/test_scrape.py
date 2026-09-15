@@ -1,9 +1,10 @@
 import queue
 import threading
 import time
-from datetime import date
+from datetime import date, timedelta
 
 from scrape import Result, absorb, drain, run_site
+from scraper import config, keywords
 from scraper.recipe import Recipe
 
 
@@ -20,6 +21,7 @@ class FakeReport:
         self.errors = []
         self.sites = []
         self.problems = []
+        self.drops = {"future": 0, "short": 0, "skipped": 0}
 
     def error(self, a_id, why):
         self.errors.append((a_id, why))
@@ -30,9 +32,14 @@ class FakeReport:
     def problem(self, a_id, why):
         self.problems.append((a_id, why))
 
+    def dropped(self, counts):
+        for name, n in (counts or {}).items():
+            self.drops[name] = self.drops.get(name, 0) + n
+
 
 def result(**over):
-    fields = dict(a_id=101, found=6, parsed=5, stored=3, dupes=2, problems=[], error=None, lines=[])
+    fields = dict(a_id=101, found=6, parsed=5, stored=3, dupes=2, drops={}, problems=[],
+                  error=None, lines=[])
     fields.update(over)
     return Result(**fields)
 
@@ -255,3 +262,144 @@ def test_drain_still_waits_while_results_keep_arriving():
     store, report = FakeStore(), FakeReport()
     drain(threads, results, store, report, None, stall_limit=2)
     assert sorted(store.results) == [(1, True), (2, True), (3, True)]
+
+
+class FakeCursor:
+    def __init__(self, rows):
+        self.rows = rows
+        self.inserts = []
+
+    def execute(self, sql, args=None):
+        if sql.startswith("INSERT"):
+            self.inserts.append(args)
+
+    def fetchall(self):
+        return self.rows
+
+    def close(self):
+        pass
+
+
+class FakeConn:
+    def __init__(self, known=()):
+        self.cur = FakeCursor([(n,) for n in known])
+
+    def cursor(self):
+        return self.cur
+
+    def commit(self):
+        pass
+
+    def rollback(self):
+        pass
+
+
+WORDS = " ".join(["policy"] * 200) + "."
+
+
+def article(when, body=WORDS):
+    return '<html><body><h1>One</h1><time>%s</time><p>%s</p></body></html>' % (when, body)
+
+
+ROW_LISTING = ('<html><body><div class="row"><h2><a class="post" href="/a">One</a></h2>'
+               '<time>2026-09-05</time></div></body></html>')
+
+
+def row_recipe():
+    return Recipe(link_selector="a.post", url_filter="", headline_selector="h2",
+                  date_selector="time", item_selector="div.row",
+                  headline_on_listing=True, date_on_listing=True)
+
+
+def run(browser, conn, recipe=None, cutoff=date(2026, 9, 1)):
+    return run_site(browser, conn, 101, "https://site.test/news", recipe or listing_recipe(),
+                    cutoff, ("ABC", "lede"), (), (), ())
+
+
+def test_a_future_dated_article_is_not_stored():
+    conn = FakeConn()
+    browser = ListingBrowser([LISTING, article("2099-01-01")])
+    result = run(browser, conn)
+    assert conn.cur.inserts == []
+    assert result.drops["future"] == 1
+
+
+def test_a_future_dated_article_does_not_reset_the_stale_count():
+    # three old ones after a future-dated one must still stop the site
+    listing = ('<html><body><a class="post" href="/a">A</a><a class="post" href="/b">B</a>'
+               '<a class="post" href="/c">C</a><a class="post" href="/d">D</a>'
+               '<a class="post" href="/e">E</a></body></html>')
+    pages = [listing, article("2099-01-01"), article("2020-01-01"), article("2020-01-02"),
+             article("2020-01-03"), article("2026-09-05")]
+    browser = ListingBrowser(pages)
+    run(browser, FakeConn())
+    # the fifth article is never reached: the run breaks on three old ones in a row
+    assert [c[0] for c in browser.calls].count("https://site.test/e") == 0
+
+
+def test_a_date_inside_the_grace_window_is_still_accepted():
+    when = date.today() + timedelta(days=config.MAX_DAYS_AHEAD - 1)
+    conn = FakeConn()
+    browser = ListingBrowser([LISTING, article(when.isoformat())])
+    result = run(browser, conn, cutoff=date(2020, 1, 1))
+    assert result.drops["future"] == 0
+    assert len(conn.cur.inserts) == 1
+
+
+def test_a_body_under_the_word_floor_is_never_stored():
+    conn = FakeConn()
+    browser = ListingBrowser([LISTING, article("2026-09-05", "Only a handful of words here.")])
+    result = run(browser, conn)
+    assert conn.cur.inserts == []
+    assert result.drops["short"] == 1
+
+
+def test_an_article_carrying_a_skip_keyword_is_never_stored():
+    keywords.load(config.KEYWORDS_CSV)
+    conn = FakeConn()
+    browser = ListingBrowser([LISTING, article("2026-09-05", "Issued via PRNewswire. " + WORDS)])
+    result = run(browser, conn)
+    assert conn.cur.inserts == []
+    assert result.drops["skipped"] == 1
+
+
+def test_an_article_the_database_already_has_is_not_fetched():
+    conn = FakeConn(known=["$H ABC260905One"])
+    browser = ListingBrowser([ROW_LISTING, article("2026-09-05")])
+    result = run(browser, conn, row_recipe())
+    assert [c[0] for c in browser.calls] == ["https://site.test/news"]
+    assert result.dupes == 1
+
+
+def test_an_article_the_database_does_not_have_is_still_fetched():
+    conn = FakeConn(known=["$H ABC260905Other"])
+    browser = ListingBrowser([ROW_LISTING, article("2026-09-05")])
+    run(browser, conn, row_recipe())
+    assert "https://site.test/a" in [c[0] for c in browser.calls]
+
+
+def test_a_site_that_reads_its_fields_from_the_article_page_is_still_fetched():
+    # without both listing flags the filename cannot be known before the fetch
+    conn = FakeConn(known=["$H ABC260905One"])
+    browser = ListingBrowser([LISTING, article("2026-09-05")])
+    run(browser, conn)
+    assert "https://site.test/a" in [c[0] for c in browser.calls]
+
+
+def test_a_site_whose_articles_were_all_duplicates_is_not_recorded_as_failed():
+    store, report = FakeStore(), FakeReport()
+    absorb(result(found=6, parsed=0, stored=0, dupes=6), store, report)
+    assert store.results == [(101, True)]
+    assert report.problems == []
+
+
+def test_links_found_but_nothing_parsed_or_recognised_still_records_failure():
+    store, report = FakeStore(), FakeReport()
+    absorb(result(found=6, parsed=0, stored=0, dupes=0), store, report)
+    assert store.results == [(101, False)]
+
+
+def test_dropped_articles_reach_the_report():
+    store, report = FakeStore(), FakeReport()
+    absorb(result(drops={"future": 1, "short": 2, "skipped": 3}), store, report)
+    assert report.drops == {"future": 1, "short": 2, "skipped": 3}

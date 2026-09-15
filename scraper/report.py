@@ -15,6 +15,7 @@ class Report:
         self.empty = []
         self.ledeless = 0
         self.problems = []
+        self.drops = {"future": 0, "short": 0, "skipped": 0}
 
     def skip(self, a_id, why):
         self.skipped += 1
@@ -31,6 +32,10 @@ class Report:
         # one broken column repeats per article, and that would bury everything else
         if (a_id, why) not in self.problems:
             self.problems.append((a_id, why))
+
+    def dropped(self, counts):
+        for name, n in (counts or {}).items():
+            self.drops[name] = self.drops.get(name, 0) + n
 
     def site(self, a_id, found, parsed, stored, dupes):
         self.ran += 1
@@ -50,6 +55,9 @@ class Report:
             "  articles: %d stored, %d duplicates, %d parsed from %d links"
             % (self.stored, self.dupes, self.parsed, self.found),
         ]
+        if any(self.drops.values()):
+            out.append("  dropped: %d future-dated, %d too short, %d on a keyword"
+                       % (self.drops["future"], self.drops["short"], self.drops["skipped"]))
         if self.ledeless:
             out.append("  %d site(s) have no lede, so those bodies open with TKTK"
                        % self.ledeless)

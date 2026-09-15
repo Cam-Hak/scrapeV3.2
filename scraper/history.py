@@ -34,7 +34,8 @@ class History:
         except Exception:
             self.write_errors += 1
 
-    def site(self, a_id, state, found=0, parsed=0, stored=0, dupes=0, error="", problems=()):
+    def site(self, a_id, state, found=0, parsed=0, stored=0, dupes=0, error="", problems=(),
+             drops=None):
         self._append(self.sites_path, {
             "run_id": self.run_id,
             "a_id": a_id,
@@ -43,6 +44,7 @@ class History:
             "parsed": parsed,
             "stored": stored,
             "dupes": dupes,
+            "drops": drops or {},
             "error": error or "",
             "problems": list(problems or ()),
         })
@@ -66,6 +68,7 @@ class History:
             "stored": getattr(report, "stored", 0),
             "dupes": getattr(report, "dupes", 0),
             "ledeless": getattr(report, "ledeless", 0),
+            "drops": dict(getattr(report, "drops", {})),
             "empty": list(getattr(report, "empty", ())),
             "problems": [list(p) for p in getattr(report, "problems", ())],
         })

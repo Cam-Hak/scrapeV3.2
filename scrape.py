@@ -7,7 +7,7 @@ from datetime import date, timedelta
 
 from bs4 import BeautifulSoup
 
-from scraper import articles, config
+from scraper import articles, config, keywords, route
 from scraper.browser import Browser
 from scraper.history import ERROR, OK, SKIPPED, STALE, History
 from scraper.isolate import run_site_isolated, sweep_profiles
@@ -15,7 +15,7 @@ from scraper.lede import document
 from scraper.parse import _norm, extract, find_items, set_dayfirst
 from scraper.report import Report
 from scraper.sites import by_host, load_sites
-from scraper.strip import load_strips, patterns_for
+from scraper.strip import clean_title, load_strips, patterns_for
 from scraper.store import Store
 
 
@@ -42,9 +42,18 @@ def scrape_site(browser, conn, a_id, url, recipe, cutoff, agency, drop, drop_tit
     extracted = stored = duplicates = stale = repeated = 0
     previous = None
     problems = []
+    drops = {"future": 0, "short": 0, "skipped": 0}
+    names = _names(rows, agency[0], drop_title) if (
+        recipe.headline_on_listing and recipe.date_on_listing) else {}
+    have = articles.existing(conn, list(names.values()))
+    horizon = date.today() + timedelta(days=config.MAX_DAYS_AHEAD)
     for i, row in enumerate(rows, 1):
         link = row["url"]
         tag = "  [%d/%d]" % (i, len(rows))
+        if names.get(link) in have:
+            duplicates += 1
+            lines.append("%s already have it -- not fetched" % tag)
+            continue
         item = extract(browser.get(link), recipe, drop, link, row, drop_title, prune)
         if not item:
             # js-built articles land after the page loads, same as the listing above
@@ -54,6 +63,10 @@ def scrape_site(browser, conn, a_id, url, recipe, cutoff, agency, drop, drop_tit
             lines.append("%s no headline, date or body -- skipped" % tag)
             continue
         extracted += 1
+        if item["date"] > horizon:
+            drops["future"] += 1
+            lines.append("%s %s is dated ahead -- dropped" % (tag, item["date"]))
+            continue
         if item["date"] < cutoff:
             stale += 1
             lines.append("%s %s older than cutoff (%d in a row)" % (tag, item["date"], stale))
@@ -63,13 +76,30 @@ def scrape_site(browser, conn, a_id, url, recipe, cutoff, agency, drop, drop_tit
                 break
             continue
         stale = 0
+        words = len(item["body"].split())
+        if words <= config.MIN_WORDS:
+            drops["short"] += 1
+            lines.append("%s only %d words -- dropped" % (tag, words))
+            continue
+        phrase = route.skipped(item["headline"], item["body"])
+        if phrase:
+            drops["skipped"] += 1
+            lines.append("%s skipped on %r" % (tag, phrase))
+            continue
+        status, comment, markers = route.decide(item["headline"], item["body"], words)
         body = document(agency[1], item["headline"], item["body"], item["date"], link)
+        for mark in markers:
+            body += " (%s)" % mark
         ok, reason = articles.save_article(
-            conn, a_id, agency[0], item["headline"], item["date"], body, item["contact"]
+            conn, a_id, agency[0], item["headline"], item["date"], body, item["contact"],
+            status, comment
         )
         if ok:
             stored += 1
-            lines.append("%s %s stored  %s" % (tag, item["date"], item["headline"][:58]))
+            lines.append("%s %s stored %s %s" % (tag, item["date"], status,
+                                                 item["headline"][:56]))
+            if comment:
+                lines.append("         %s" % comment)
         elif reason == "duplicate":
             duplicates += 1
             lines.append("%s %s already have it" % (tag, item["date"]))
@@ -82,10 +112,20 @@ def scrape_site(browser, conn, a_id, url, recipe, cutoff, agency, drop, drop_tit
         previous = _norm(item["headline"])
     if repeated:
         problems.append("%d repeated headline(s) -- selector may be a banner" % repeated)
-    return found, extracted, stored, duplicates, problems
+    return found, extracted, stored, duplicates, drops, problems
 
 
-Result = namedtuple("Result", "a_id found parsed stored dupes problems error lines")
+def _names(rows, prefix, drop_title):
+    # both fields come off the listing here, so the insert's filename is known before the fetch
+    found = {}
+    for row in rows:
+        if row["headline"] and row["date"]:
+            found[row["url"]] = articles.filename(
+                prefix, row["date"], articles.clean(clean_title(row["headline"], drop_title)))
+    return found
+
+
+Result = namedtuple("Result", "a_id found parsed stored dupes drops problems error lines")
 
 
 def run_site(browser, conn, a_id, url, recipe, cutoff, agency, drop, drop_title, prune, cap=None):
@@ -94,14 +134,14 @@ def run_site(browser, conn, a_id, url, recipe, cutoff, agency, drop, drop_title,
     head = ["", "%s %s" % (a_id, url)]
     lines = [] if agency[1] else ["  no lede -- the body opens with TKTK placeholders"]
     try:
-        found, parsed, stored, dupes, problems = scrape_site(
+        found, parsed, stored, dupes, drops, problems = scrape_site(
             browser, conn, a_id, url, recipe, cutoff, agency, drop, drop_title, prune, lines, cap)
     except Exception as e:
         why = "%s: %s" % (type(e).__name__, e)
-        return Result(a_id, 0, 0, 0, 0, [], why, head + lines + ["  ERROR " + why])
+        return Result(a_id, 0, 0, 0, 0, {}, [], why, head + lines + ["  ERROR " + why])
     lines.append("  %s done in %ds -- found=%s parsed=%s stored=%s dupes=%s"
                  % (a_id, time.time() - begun, found, parsed, stored, dupes))
-    return Result(a_id, found, parsed, stored, dupes, problems, None, head + lines)
+    return Result(a_id, found, parsed, stored, dupes, drops, problems, None, head + lines)
 
 
 def absorb(r, store, report, history=None):
@@ -110,10 +150,12 @@ def absorb(r, store, report, history=None):
         report.error(r.a_id, r.error)
         state = ERROR
     else:
-        # links but nothing parsed means the selectors have gone stale
-        healthy = r.found > 0 and r.parsed > 0
+        # links but nothing parsed or recognised means the selectors have gone stale;
+        # a site we already hold every article for never parses one, and is not stale
+        healthy = r.found > 0 and (r.parsed > 0 or r.dupes > 0)
         store.record_result(r.a_id, healthy)
         report.site(r.a_id, r.found, r.parsed, r.stored, r.dupes)
+        report.dropped(r.drops)
         if not healthy:
             report.problem(r.a_id, "found=%s parsed=0" % r.found)
         for problem in r.problems:
@@ -121,7 +163,7 @@ def absorb(r, store, report, history=None):
         state = OK if healthy else STALE
     if history:
         history.site(r.a_id, state, r.found, r.parsed, r.stored, r.dupes,
-                     r.error or "", r.problems)
+                     r.error or "", r.problems, r.drops)
     log("\n".join(r.lines))
 
 
@@ -226,6 +268,7 @@ def main():
     agencies = articles.load_agencies(conn, [a_id for a_id, _ in sites])
     conn.close()
     strips = load_strips(config.STRIP_CSV)
+    keywords.load(config.KEYWORDS_CSV)
     report = Report(cutoff, len(sites))
     log("%d site(s), keeping articles on or after %s" % (len(sites), cutoff))
 
