@@ -51,7 +51,14 @@ three, so `--id 18092 --limit 5` silently runs one site.
 | `--workers n` | Sites in parallel (default 4). Use 1 to run one at a time. |
 | `--retry-failed` | Clear the failure streaks first, so sites benched after 3 bad runs are tried again |
 | `--senate` | Run only the sites whose url carries `house` or `senate` |
+| `--headless` | Run Chrome with no window |
 | `--production` | Email the run summary when the run finishes |
+
+`--headless` works on `build_recipes.py` too, and `SCRAPER_HEADLESS=1` in `.env` does the
+same thing without the flag. **A site behind Cloudflare will not let a headless browser
+through** — the challenge never clears, so those sites come back empty. Off Windows the
+window cannot be parked off-screen, so this is also how you keep a desktop usable while
+a run is going.
 
 `--senate` splits the file in two. With it you get the congressional sites and nothing
 else; without it you get everything else and none of them, so the two runs together

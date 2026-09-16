@@ -196,3 +196,26 @@ def test_browser_args_survive_offscreen_being_none(monkeypatch):
 
     b.Browser(user_data_dir="/tmp/profile_x").get("https://site.test")
     assert seen["args"] == ["--user-data-dir=/tmp/profile_x"]
+
+def test_headless_is_off_unless_the_environment_asks_for_it(monkeypatch):
+    from scraper import config
+
+    monkeypatch.delenv("SCRAPER_HEADLESS", raising=False)
+    assert config.headless() is False
+    monkeypatch.setenv("SCRAPER_HEADLESS", "1")
+    assert config.headless() is True
+
+
+def test_a_browser_reads_the_setting_when_it_is_built(monkeypatch):
+    # --headless sets the variable after import, so a value bound at import would miss it
+    import scraper.browser as b
+
+    monkeypatch.setenv("SCRAPER_HEADLESS", "1")
+    assert b.Browser().headless is True
+
+
+def test_an_explicit_choice_beats_the_environment(monkeypatch):
+    import scraper.browser as b
+
+    monkeypatch.setenv("SCRAPER_HEADLESS", "1")
+    assert b.Browser(headless=False).headless is False
