@@ -31,6 +31,11 @@ def mail():
     )
 
 
+def headless():
+    # read per call, so --headless reaches the isolated children through the environment
+    return os.environ.get("SCRAPER_HEADLESS", "") == "1"
+
+
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")
 LLM_MODEL = os.environ.get("SCRAPER_LLM_MODEL", "claude-haiku-4-5-20251001")
 LLM_WORKSPACE_ID = os.environ.get("SCRAPER_LLM_WORKSPACE_ID")
@@ -45,7 +50,6 @@ REQUEST_DELAY = 2
 DEFAULT_DAYS = 3
 MAX_FAILURES = 3
 WORKERS = 4
-HEADLESS = False
 
 STOP_AFTER_OLD = 3
 STRIP_CSV = "strip.csv"

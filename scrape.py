@@ -1,4 +1,5 @@
 import argparse
+import os
 import queue
 import threading
 import time
@@ -273,6 +274,9 @@ def main():
     ap.add_argument("--in-process", action="store_true",
                     help="run sites in this process instead of isolating each one"
                          " -- faster, but one unresponsive site hangs its worker")
+    ap.add_argument("--headless", action="store_true",
+                    help="run Chrome with no window -- quiet, but a site behind Cloudflare"
+                         " will not let a headless browser through")
     ap.add_argument("--senate", action="store_true",
                     help="run only the sites whose url carries house or senate;"
                          " without it those are the sites left out")
@@ -280,6 +284,8 @@ def main():
                     help="email the run summary when the run finishes,"
                          " to the addresses in SCRAPER_MAIL_TO")
     args = ap.parse_args()
+    if args.headless:
+        os.environ["SCRAPER_HEADLESS"] = "1"  # the isolated children inherit it
     # read up front, so a missing setting fails before an hour of scraping rather than after
     mailing = config.mail() if args.production else None
     cutoff = date.today() - timedelta(days=args.days)

@@ -1,4 +1,5 @@
 import argparse
+import os
 import time
 
 from bs4 import BeautifulSoup
@@ -256,7 +257,12 @@ def main():
     ap.add_argument("--limit", type=int)
     ap.add_argument("--force", action="store_true")
     ap.add_argument("--remove", action="store_true")
+    ap.add_argument("--headless", action="store_true",
+                    help="run Chrome with no window -- quiet, but a site behind Cloudflare"
+                         " will not let a headless browser through")
     args = ap.parse_args()
+    if args.headless:
+        os.environ["SCRAPER_HEADLESS"] = "1"
     sites = load_sites(config.SITES_CSV, args.id, args.start, args.limit, args.last)
     if not sites:
         print("no matching sites")

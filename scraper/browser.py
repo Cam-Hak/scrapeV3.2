@@ -3,7 +3,8 @@ import time
 
 from seleniumbase import sb_cdp
 
-from .config import HEADLESS, REQUEST_DELAY
+from . import config
+from .config import REQUEST_DELAY
 
 TURNSTILE = '[name="cf-turnstile-response"]'
 CHALLENGE = "cdn-cgi/challenge-platform"
@@ -38,8 +39,8 @@ def wait_for(last, now, delay):
 
 
 class Browser:
-    def __init__(self, headless=HEADLESS, user_data_dir=None):
-        self.headless = headless
+    def __init__(self, headless=None, user_data_dir=None):
+        self.headless = config.headless() if headless is None else headless
         # Chrome writes a fresh profile per launch and can leave a GB behind. When
         # the caller owns the directory it can delete it even if we are killed.
         self.user_data_dir = user_data_dir
