@@ -19,6 +19,18 @@ def mysql():
     )
 
 
+def mail():
+    return dict(
+        host=os.environ["SCRAPER_MAIL_HOST"],
+        port=int(os.environ.get("SCRAPER_MAIL_PORT", 587)),
+        user=os.environ["SCRAPER_MAIL_USER"],
+        password=os.environ["SCRAPER_MAIL_PASSWORD"],
+        sender=os.environ["SCRAPER_MAIL_FROM"],
+        to=os.environ["SCRAPER_MAIL_TO"],
+        cc=os.environ.get("SCRAPER_MAIL_CC", ""),
+    )
+
+
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")
 LLM_MODEL = os.environ.get("SCRAPER_LLM_MODEL", "claude-haiku-4-5-20251001")
 LLM_WORKSPACE_ID = os.environ.get("SCRAPER_LLM_WORKSPACE_ID")

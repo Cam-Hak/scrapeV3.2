@@ -3,9 +3,11 @@ import threading
 import time
 from datetime import date, timedelta
 
-from scrape import Result, absorb, drain, run_site
+import scrape
+from scrape import Result, absorb, drain, notify, run_site
 from scraper import config, keywords
 from scraper.recipe import Recipe
+from scraper.report import Report
 
 
 class FakeStore:
@@ -403,3 +405,32 @@ def test_dropped_articles_reach_the_report():
     store, report = FakeStore(), FakeReport()
     absorb(result(drops={"future": 1, "short": 2, "skipped": 3}), store, report)
     assert report.drops == {"future": 1, "short": 2, "skipped": 3}
+
+
+MAILING = {"sender": "scraper@example.com", "to": "desk@example.com", "cc": ""}
+
+
+def test_a_mail_server_that_is_down_does_not_fail_a_finished_run(monkeypatch):
+    def refuse(*args, **kw):
+        raise OSError("connection refused")
+
+    monkeypatch.setattr(scrape.mail, "send", refuse)
+    notify(MAILING, Report(date(2026, 9, 1), 1), "20260915T090000", [])
+
+
+def test_the_subject_names_the_run_and_what_it_did(monkeypatch):
+    seen = []
+    monkeypatch.setattr(scrape.mail, "send", lambda *args, **kw: seen.append(args))
+    report = Report(date(2026, 9, 1), 1)
+    report.site(101, 5, 5, 3, 0)
+    notify(MAILING, report, "20260915T090000", ["summary", "  3 stored"])
+    assert seen[0][2] == "scrape 20260915T090000 -- 3 stored, 0 error(s)"
+    assert seen[0][3] == "summary\n  3 stored"
+
+
+def test_the_summary_goes_to_the_addresses_the_settings_name(monkeypatch):
+    seen = []
+    monkeypatch.setattr(scrape.mail, "send", lambda *args, **kw: seen.append((args, kw)))
+    notify(dict(MAILING, cc="editor@example.com"), Report(date(2026, 9, 1), 1), "r", [])
+    assert seen[0][0][:2] == ("scraper@example.com", "desk@example.com")
+    assert seen[0][1] == {"cc_addr": "editor@example.com"}

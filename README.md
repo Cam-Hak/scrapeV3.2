@@ -7,8 +7,12 @@ python -m venv .venv
 pip install -r requirements.txt
 cp .env.example .env           # then fill it in
 ```
-`.env` holds the MySQL credentials and the Anthropic API key. It is gitignored, as
-is `.venv`. Activate the venv in every new shell before running anything below.
+`.env` holds the MySQL credentials, the Anthropic API key and the mail settings. It is
+gitignored, as is `.venv`. Activate the venv in every new shell before running anything
+below.
+
+Only the MySQL block is needed to scrape. `ANTHROPIC_API_KEY` is read by
+`build_recipes.py` alone, and the `SCRAPER_MAIL_*` block by `--production` alone.
 
 ```bash
 python -m pytest -q            # the test suite
@@ -46,6 +50,20 @@ three, so `--id 18092 --limit 5` silently runs one site.
 | `--days n` | Keep articles from the last n days (default 3) |
 | `--workers n` | Sites in parallel (default 4). Use 1 to run one at a time. |
 | `--retry-failed` | Clear the failure streaks first, so sites benched after 3 bad runs are tried again |
+| `--senate` | Run only the sites whose url carries `house` or `senate` |
+| `--production` | Email the run summary when the run finishes |
+
+`--senate` splits the file in two. With it you get the congressional sites and nothing
+else; without it you get everything else and none of them, so the two runs together
+cover the file exactly once. The words have to stand on their own, which is why
+`lighthouse.mq.edu.au` is not a chamber. `--id` overrides the split the same way it
+overrides the other selectors, so a site you name by id always runs.
+
+`--production` reads the seven `SCRAPER_MAIL_*` settings in `.env`. They are read at
+startup, so a missing one stops the run before it scrapes rather than after. The mail
+itself is the last thing a run does, and a refused send is logged and nothing more —
+the articles are already stored by then. `SCRAPER_MAIL_TO` and `SCRAPER_MAIL_CC` take
+several addresses, separated by a comma or a semicolon.
 
 Sites are grouped by host, so two entries on one host never run at the same time
 no matter how many workers you give it.
@@ -102,6 +120,30 @@ Worker count is bounded by Chrome, not by Python. Each browser is roughly 300-50
 |---|---|
 | 4 vCPU / 8GB | 4 |
 | 8 vCPU / 16GB | 8 |
+
+### On a schedule
+
+Two runs a day, the congressional sites and the rest, an hour apart so they never start
+Chrome at the same time:
+
+```
+0 4 * * *  cd /www/coder.tns/scrapeV3.2 && xvfb-run .venv/bin/python scrape.py --senate --days 2 --production
+0 5 * * *  cd /www/coder.tns/scrapeV3.2 && xvfb-run .venv/bin/python scrape.py --days 2 --production
+```
+
+Repeating a day is harmless: the `filename` column is unique, so an article already
+loaded is counted as a duplicate rather than stored again, and a site whose articles
+were all duplicates is not treated as broken.
+
+**`recipes.db` is committed, and a run writes to it** — every site's pass/fail streak
+lands there. A deploy that pulls has to overwrite rather than merge:
+
+```bash
+git fetch origin && git reset --hard origin/main
+```
+
+That discards the streaks, which rebuild over three runs. Nothing else a run writes is
+tracked: `runs.jsonl`, `run_sites.jsonl` and `*.log` are all gitignored.
 
 ## DB Commands
 *If sqlite3 isn't installed run one of these commands*

@@ -7,7 +7,7 @@ from datetime import date, timedelta
 
 from bs4 import BeautifulSoup
 
-from scraper import articles, config, keywords, route
+from scraper import articles, config, keywords, mail, route
 from scraper.browser import Browser
 from scraper.history import ERROR, OK, SKIPPED, STALE, History
 from scraper.isolate import run_site_isolated, sweep_profiles
@@ -233,6 +233,16 @@ def drain(threads, results, store, report, history=None, stall_limit=None):
         absorb(r, store, report, history)
 
 
+def notify(conf, report, run_id, lines):
+    subject = "scrape %s -- %d stored, %d error(s)" % (run_id, report.stored, report.errors)
+    try:
+        mail.send(conf["sender"], conf["to"], subject, "\n".join(lines), cc_addr=conf["cc"])
+        log("summary emailed to %s" % conf["to"])
+    except Exception as e:
+        # a mail server that is down must not turn a finished run into a failed one
+        log("could not email the summary: %s: %s" % (type(e).__name__, e))
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--days", type=int, default=config.DEFAULT_DAYS)
@@ -253,9 +263,18 @@ def main():
     ap.add_argument("--in-process", action="store_true",
                     help="run sites in this process instead of isolating each one"
                          " -- faster, but one unresponsive site hangs its worker")
+    ap.add_argument("--senate", action="store_true",
+                    help="run only the sites whose url carries house or senate;"
+                         " without it those are the sites left out")
+    ap.add_argument("--production", action="store_true",
+                    help="email the run summary when the run finishes,"
+                         " to the addresses in SCRAPER_MAIL_TO")
     args = ap.parse_args()
+    # read up front, so a missing setting fails before an hour of scraping rather than after
+    mailing = config.mail() if args.production else None
     cutoff = date.today() - timedelta(days=args.days)
-    sites = load_sites(config.SITES_CSV, args.id, args.start, args.limit, args.last)
+    sites = load_sites(config.SITES_CSV, args.id, args.start, args.limit, args.last,
+                       senate=args.senate)
     if not sites:
         print("no matching sites")
         return
@@ -338,9 +357,12 @@ def main():
 
     store.close()
     history.finish(report, days=args.days, workers=args.workers)
+    lines = report.lines()
     log("")
-    for line in report.lines():
+    for line in lines:
         log(line)
+    if mailing:
+        notify(mailing, report, history.run_id, lines)
 
 
 if __name__ == "__main__":
