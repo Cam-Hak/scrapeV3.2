@@ -103,19 +103,27 @@ matches on that line.
 When text cannot do it safely, look for a class to `prune` instead: fetch one article, find
 the element wrapping the junk, and add it to the fourth column.
 
-## 5. Report
+## 5. Remove what did not work, then report
 
-One message. What worked, and the list to remove with a reason per site:
+Remove them yourself. Back the recipe JSON and the csv and strip rows up to the scratchpad
+first, so a site can be restored by pasting rather than rebuilding:
+
+```bash
+python build_recipes.py --id <ids> --remove --headless
+```
+
+Never run this while a build is in flight — both write `recipes.db`, and a lock can kill
+the build part way through.
+
+`--remove` does not touch MySQL. Name any leftover `press_release` rows rather than
+deleting them unasked.
+
+Then one message: what worked, and what was removed with a reason per site.
 
 | a_id | site | reason |
 |---|---|---|
 
-**Only this batch.** Never re-list sites reported on an earlier one.
-
-**Do not remove them.** That is Carter's call and he does it himself. If he does ask
-outright, back the recipe JSON and the csv and strip rows up to the scratchpad first, then
-`build_recipes.py --id <ids> --remove --headless`. That does not touch MySQL — name any
-leftover `press_release` rows rather than deleting them unasked.
+**Only this batch.** Never re-list sites from an earlier one.
 
 ## When a site cannot be made to work
 

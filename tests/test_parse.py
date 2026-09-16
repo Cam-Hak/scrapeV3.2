@@ -212,3 +212,19 @@ def test_document_rows_are_never_returned_as_articles():
     r.item_selector = ".row"
     assert [i["url"] for i in find_items(DOCS, "https://site.test/n", r)] == [
         "https://site.test/read/one"]
+
+CONSENT_PAGE = """<html><body><article>
+<p>%s</p>
+<div id="cookiescript_injected_wrapper"><div id="cookiescript_injected">
+<table class="cookiescript_fullreport"><caption>Cookie report</caption>
+<tr><td>IDE.doubleclick.net 1 year This cookie is set by Doubleclick and carries information.</td></tr>
+</table></div></div>
+</article></body></html>""" % (" ".join(["The wastewater treatment plant runs a digital twin."] * 12))
+
+
+def test_a_consent_widget_is_dropped_before_the_body_is_read():
+    # the vendor injects its whole cookie table into the page, and it can outweigh the article
+    text = _article_text(CONSENT_PAGE)
+    assert "digital twin" in text
+    assert "Cookie report" not in text
+    assert "doubleclick" not in text

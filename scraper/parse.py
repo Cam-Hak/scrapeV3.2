@@ -34,7 +34,8 @@ MD_ESCAPE = re.compile(r"\\([^\w\s])")
 # trafilatura reads none of these, so a link to one is a fetch that cannot produce a body
 DOCUMENT = (".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".zip")
 WIDGET_ROOTS = ("CybotCookiebotDialog", "onetrust-consent-sdk", "usercentrics-root",
-                "truste-consent-track", "qc-cmp2-container", "touchpoints-form-", "fba-")
+                "truste-consent-track", "qc-cmp2-container", "touchpoints-form-", "fba-",
+                "cookiescript_injected")
 # a consent dialog or feedback form outweighs a short article, and trafilatura returns it instead
 WIDGET_PRUNE = ["//*[starts-with(@id, '%s')]" % root for root in WIDGET_ROOTS]
 CLASS_PRUNE = "//*[contains(concat(' ', normalize-space(@class), ' '), ' %s ')]"
