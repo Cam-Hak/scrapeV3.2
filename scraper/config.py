@@ -35,6 +35,10 @@ ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")
 LLM_MODEL = os.environ.get("SCRAPER_LLM_MODEL", "claude-haiku-4-5-20251001")
 LLM_WORKSPACE_ID = os.environ.get("SCRAPER_LLM_WORKSPACE_ID")
 
+# bump both when the desk should see a new version on the run summary
+VERSION = "3.2.0"
+VERSION_DATE = "09/15/2026"
+
 SQLITE_PATH = "recipes.db"
 SITES_CSV = "test-sites.csv"
 REQUEST_DELAY = 2

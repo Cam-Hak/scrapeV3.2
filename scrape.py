@@ -43,6 +43,7 @@ def scrape_site(browser, conn, a_id, url, recipe, cutoff, agency, drop, drop_tit
     previous = None
     problems = []
     drops = {"future": 0, "short": 0, "skipped": 0}
+    routed = {"E": 0, "W": 0, "short_doc": 0}
     names = _names(rows, agency[0], drop_title) if (
         recipe.headline_on_listing and recipe.date_on_listing) else {}
     have = articles.existing(conn, list(names.values()))
@@ -87,6 +88,9 @@ def scrape_site(browser, conn, a_id, url, recipe, cutoff, agency, drop, drop_tit
             lines.append("%s skipped on %r" % (tag, phrase))
             continue
         status, comment, markers = route.decide(item["headline"], item["body"], words)
+        routed[status] = routed.get(status, 0) + 1
+        if route.short(words):
+            routed["short_doc"] += 1
         body = document(agency[1], item["headline"], item["body"], item["date"], link)
         for mark in markers:
             body += " (%s)" % mark
@@ -112,7 +116,7 @@ def scrape_site(browser, conn, a_id, url, recipe, cutoff, agency, drop, drop_tit
         previous = _norm(item["headline"])
     if repeated:
         problems.append("%d repeated headline(s) -- selector may be a banner" % repeated)
-    return found, extracted, stored, duplicates, drops, problems
+    return found, extracted, stored, duplicates, drops, routed, problems
 
 
 def _names(rows, prefix, drop_title):
@@ -125,7 +129,8 @@ def _names(rows, prefix, drop_title):
     return found
 
 
-Result = namedtuple("Result", "a_id found parsed stored dupes drops problems error lines")
+Result = namedtuple("Result",
+                    "a_id found parsed stored dupes drops routed problems error lines")
 
 
 def run_site(browser, conn, a_id, url, recipe, cutoff, agency, drop, drop_title, prune, cap=None):
@@ -134,14 +139,15 @@ def run_site(browser, conn, a_id, url, recipe, cutoff, agency, drop, drop_title,
     head = ["", "%s %s" % (a_id, url)]
     lines = [] if agency[1] else ["  no lede -- the body opens with TKTK placeholders"]
     try:
-        found, parsed, stored, dupes, drops, problems = scrape_site(
+        found, parsed, stored, dupes, drops, routed, problems = scrape_site(
             browser, conn, a_id, url, recipe, cutoff, agency, drop, drop_title, prune, lines, cap)
     except Exception as e:
         why = "%s: %s" % (type(e).__name__, e)
-        return Result(a_id, 0, 0, 0, 0, {}, [], why, head + lines + ["  ERROR " + why])
+        return Result(a_id, 0, 0, 0, 0, {}, {}, [], why, head + lines + ["  ERROR " + why])
     lines.append("  %s done in %ds -- found=%s parsed=%s stored=%s dupes=%s"
                  % (a_id, time.time() - begun, found, parsed, stored, dupes))
-    return Result(a_id, found, parsed, stored, dupes, drops, problems, None, head + lines)
+    return Result(a_id, found, parsed, stored, dupes, drops, routed, problems, None,
+                  head + lines)
 
 
 def absorb(r, store, report, history=None):
@@ -156,6 +162,7 @@ def absorb(r, store, report, history=None):
         store.record_result(r.a_id, healthy)
         report.site(r.a_id, r.found, r.parsed, r.stored, r.dupes)
         report.dropped(r.drops)
+        report.sent(r.routed)
         if not healthy:
             report.problem(r.a_id, "found=%s parsed=0" % r.found)
         for problem in r.problems:
@@ -163,7 +170,7 @@ def absorb(r, store, report, history=None):
         state = OK if healthy else STALE
     if history:
         history.site(r.a_id, state, r.found, r.parsed, r.stored, r.dupes,
-                     r.error or "", r.problems, r.drops)
+                     r.error or "", r.problems, r.drops, r.routed)
     log("\n".join(r.lines))
 
 
@@ -234,7 +241,10 @@ def drain(threads, results, store, report, history=None, stall_limit=None):
 
 
 def notify(conf, report, run_id, lines):
-    subject = "scrape %s -- %d stored, %d error(s)" % (run_id, report.stored, report.errors)
+    # both halves mail in on the same morning, so the subject has to say which one this is
+    half = "house and senate" if report.senate else "all other sites"
+    subject = "scrape %s, %s -- %d docs loaded, %d error(s)" % (
+        run_id, half, report.stored, report.errors)
     try:
         mail.send(conf["sender"], conf["to"], subject, "\n".join(lines), cc_addr=conf["cc"])
         log("summary emailed to %s" % conf["to"])
@@ -288,7 +298,7 @@ def main():
     conn.close()
     strips = load_strips(config.STRIP_CSV)
     keywords.load(config.KEYWORDS_CSV)
-    report = Report(cutoff, len(sites))
+    report = Report(cutoff, len(sites), days=args.days, senate=args.senate)
     log("%d site(s), keeping articles on or after %s" % (len(sites), cutoff))
 
     jobs = queue.Queue()

@@ -9,6 +9,10 @@ CHECKS = ((keywords.BODY, "E"), (keywords.BODY, "W"),
           (keywords.BODY, ""), (keywords.HEADLINE, ""))
 
 
+def short(words):
+    return MIN_WORDS <= words <= SHORT_DOC
+
+
 def decide(headline, body, words, rules=None):
     text = {keywords.BODY: body, keywords.HEADLINE: headline}
     status, comments, markers = DEFAULT_STATUS, [], []
@@ -21,7 +25,7 @@ def decide(headline, body, words, rules=None):
             status = action
         if action == "E" and field == keywords.BODY:
             markers += [rule["marker"] for rule in hits if rule["marker"]]
-    if MIN_WORDS <= words <= SHORT_DOC:
+    if short(words):
         status = "W"
         comments.append(SHORT_NOTE)
     # two rules can carry one code, and the desk should not read it twice

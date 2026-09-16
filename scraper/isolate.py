@@ -26,13 +26,14 @@ from datetime import date
 # marked rather than assumed to be the last thing printed
 MARKER = "@@RESULT@@"
 
-FIELDS = ("a_id", "found", "parsed", "stored", "dupes", "drops", "problems", "error",
-          "lines")
+FIELDS = ("a_id", "found", "parsed", "stored", "dupes", "drops", "routed", "problems",
+          "error", "lines")
 
 
 def _blank(a_id, url, error, note):
-    return dict(a_id=a_id, found=0, parsed=0, stored=0, dupes=0, drops={}, problems=[],
-                error=error, lines=["", "%s %s" % (a_id, url), "  " + note])
+    return dict(a_id=a_id, found=0, parsed=0, stored=0, dupes=0, drops={}, routed={},
+                problems=[], error=error,
+                lines=["", "%s %s" % (a_id, url), "  " + note])
 
 
 def _kill_group(proc):

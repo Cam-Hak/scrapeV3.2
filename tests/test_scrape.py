@@ -24,6 +24,7 @@ class FakeReport:
         self.sites = []
         self.problems = []
         self.drops = {"future": 0, "short": 0, "skipped": 0}
+        self.routed = {"E": 0, "W": 0, "short_doc": 0}
 
     def error(self, a_id, why):
         self.errors.append((a_id, why))
@@ -38,10 +39,14 @@ class FakeReport:
         for name, n in (counts or {}).items():
             self.drops[name] = self.drops.get(name, 0) + n
 
+    def sent(self, counts):
+        for name, n in (counts or {}).items():
+            self.routed[name] = self.routed.get(name, 0) + n
+
 
 def result(**over):
-    fields = dict(a_id=101, found=6, parsed=5, stored=3, dupes=2, drops={}, problems=[],
-                  error=None, lines=[])
+    fields = dict(a_id=101, found=6, parsed=5, stored=3, dupes=2, drops={}, routed={},
+                  problems=[], error=None, lines=[])
     fields.update(over)
     return Result(**fields)
 
@@ -424,7 +429,8 @@ def test_the_subject_names_the_run_and_what_it_did(monkeypatch):
     report = Report(date(2026, 9, 1), 1)
     report.site(101, 5, 5, 3, 0)
     notify(MAILING, report, "20260915T090000", ["summary", "  3 stored"])
-    assert seen[0][2] == "scrape 20260915T090000 -- 3 stored, 0 error(s)"
+    subject = "scrape 20260915T090000, all other sites -- 3 docs loaded, 0 error(s)"
+    assert seen[0][2] == subject
     assert seen[0][3] == "summary\n  3 stored"
 
 
@@ -434,3 +440,22 @@ def test_the_summary_goes_to_the_addresses_the_settings_name(monkeypatch):
     notify(dict(MAILING, cc="editor@example.com"), Report(date(2026, 9, 1), 1), "r", [])
     assert seen[0][0][:2] == ("scraper@example.com", "desk@example.com")
     assert seen[0][1] == {"cc_addr": "editor@example.com"}
+
+
+def test_the_subject_says_which_of_the_two_daily_runs_this_was(monkeypatch):
+    seen = []
+    monkeypatch.setattr(scrape.mail, "send", lambda *args, **kw: seen.append(args))
+    notify(MAILING, Report(date(2026, 9, 1), 1, senate=True), "r", [])
+    assert "house and senate" in seen[0][2]
+
+
+def test_the_email_body_is_the_whole_summary(monkeypatch):
+    seen = []
+    monkeypatch.setattr(scrape.mail, "send", lambda *args, **kw: seen.append(args))
+    report = Report(date(2026, 9, 1), 1, days=2)
+    report.site(101, 20, 18, 12, 6)
+    notify(MAILING, report, "r", report.lines())
+    body = seen[0][3]
+    assert body.startswith("Load Version ")
+    assert "Docs Loaded: 12" in body
+    assert "Passed Parameters:" in body

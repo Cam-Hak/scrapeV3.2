@@ -65,6 +65,36 @@ itself is the last thing a run does, and a refused send is logged and nothing mo
 the articles are already stored by then. `SCRAPER_MAIL_TO` and `SCRAPER_MAIL_CC` take
 several addresses, separated by a comma or a semicolon.
 
+### The run summary
+
+Every run ends with the same block, printed to the console and sent as the body of the
+`--production` email:
+
+```
+Load Version 3.2.0 09/15/2026
+       Docs Loaded: 667
+       URLS processed: 1869
+       Articles read: 1026
+       DUPS skipped: 843
+       No Ledes found: 0
+       Docs Sent To Box 4 Editor Box For Phrase: 9
+       Docs Sent To Box 7 Repairs: 5
+       Short Docs Sent To Box 7 Repairs: 3
+       Article Description Too Short: 12
+       Article Skipped Due to Keyword: 4
+       Article Dated Ahead: 1
+
+Passed Parameters:
+       ...
+```
+
+`URLS processed` counts every link the listings offered; `Articles read` counts the ones
+actually fetched and parsed, so the gap is what the duplicate pre-check saved. Counts
+show even at zero, so a section going quiet is visible.
+
+`VERSION` and `VERSION_DATE` live in `scraper/config.py` — bump both when the desk
+should see a new version on the summary.
+
 Sites are grouped by host, so two entries on one host never run at the same time
 no matter how many workers you give it.
 
