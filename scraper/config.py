@@ -36,6 +36,9 @@ def headless():
     return os.environ.get("SCRAPER_HEADLESS", "") == "1"
 
 
+# the agencies column holding the lede template, named differently on some servers
+LEDE_COLUMN = os.environ.get("SCRAPER_LEDE_COLUMN") or "lead"
+
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")
 LLM_MODEL = os.environ.get("SCRAPER_LLM_MODEL", "claude-haiku-4-5-20251001")
 LLM_WORKSPACE_ID = os.environ.get("SCRAPER_LLM_WORKSPACE_ID")

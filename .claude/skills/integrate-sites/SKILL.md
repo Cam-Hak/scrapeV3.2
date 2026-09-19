@@ -1,6 +1,6 @@
 ---
 name: integrate-sites
-description: Use when a batch of new sites has been added to the end of test-sites.csv and they need recipes, a test run, document cleanup, and a list of the ones to drop. Runs the whole batch end to end without checking in between steps.
+description: Use when a batch of new sites has been added to the end of test-sites.csv and they need recipes, a test run, document cleanup, and the failures dropped. Also the reference for what each build or output failure means and which tool fixes it.
 ---
 
 # Integrating a batch of new sites
@@ -11,9 +11,17 @@ stop to ask between steps.
 Every run uses `--headless`. Chrome windows popping up interrupt whatever is happening on
 the machine.
 
-## 1. Find the batch
+## The loop
 
-The new rows are the ones with no recipe.
+1. **Find the batch** — the rows with no recipe.
+2. **Build the recipes** — `build_recipes.py`, then deal with what failed.
+3. **Run them** — `scrape.py`, which writes to MySQL.
+4. **Check and clean** — `check_output.py`, then `strip.csv` / `keywords.csv` / the recipe.
+5. **Remove what cannot work**, and report the batch in one message.
+
+---
+
+## 1. Find the batch
 
 ```python
 import csv, sqlite3
@@ -24,8 +32,22 @@ print(len(rows), "sites,", len(new), "new")
 print(" ".join(str(a) for a, _ in new))
 ```
 
-Every site reported for removal on an earlier batch has already been removed. If one is
-still in the file, it is a new site that happens to share the problem, not a leftover.
+`test-sites.csv` is `a_id,url`, one site per line. The url is the listing page — one page,
+no pagination, no "load more".
+
+Sites reported for removal on an earlier batch should already be gone. If one is still
+there, leave it out of the build rather than re-confirming it fails.
+
+**Before building, check the site has a lede.** A site with no `leads` row in `agencies`
+cannot build a document and will be skipped at run time:
+
+```python
+from scraper import articles
+conn = articles.connect()
+found = articles.load_agencies(conn, ids)
+conn.close()
+print("no lede:", [i for i in ids if not found.get(i, ("", ""))[1]])
+```
 
 ## 2. Build the recipes
 
@@ -33,18 +55,40 @@ still in the file, it is a new site that happens to share the problem, not a lef
 python build_recipes.py --headless --id <the new ids>
 ```
 
-Twelve minutes for twenty sites. Run it in the background and redirect to a file — a
-`| tail` pipe buffers everything and hides progress until it exits.
+Twelve to fifteen minutes for twenty sites. Run it in the background and redirect to a
+file — a `| tail` pipe buffers everything and hides progress until it exits.
 
-It prints its failures at the end. Read the reason before deciding anything.
+A recipe is the `Recipe` dataclass in `scraper/recipe.py` and nothing else. The model is
+asked for selectors, they are checked against seven cached articles, and the result is
+saved to `recipes.db`. **Body text always comes from trafilatura — there is no body
+selector.**
 
-**A site that comes back with a tiny skeleton may just be blocked.** Headless never clears
-Cloudflare. Before calling such a site broken, refetch it with `Browser(headless=False)` and
-compare the skeleton size. Same size means headless was not the problem.
+### What each failure means
+
+| What it printed | What it means | What to do |
+|---|---|---|
+| `no article links found`, tiny skeleton (a few hundred chars) | the page rendered nothing | refetch headed; if the skeleton is the same size, the site is out of reach |
+| `no article links found`, large skeleton | the model could not find the list | worth hand-writing |
+| `skeleton 150000 chars -- TRUNCATED` | listing too big for the model to see the list | worth hand-writing |
+| `selectors matched no sample article` | headline, date or body missing | recheck those selectors |
+| `headline ... is the same on every article` | the headline selector is a site banner | point it at the article's own heading |
+| `worked on only N of M` | a selector tied to one page, usually a per-post class | pick a stable class |
+
+**Headless never clears Cloudflare.** A site that returns almost nothing under `--headless`
+may only be blocked. Check before writing it off:
+
+```python
+from scraper.browser import Browser
+from scraper.llm import skeleton
+with Browser(headless=False) as b:
+    html = b.get(url, patient=True)
+print(len(html), len(skeleton(html)))
+```
+
+Same skeleton size headed means headless was not the problem.
 
 Hand-write a recipe with the **manual-recipe** skill when the reason says the model failed
-rather than the site: a listing over the 150k skeleton limit, or a page whose article list is
-there but was not found. Do not hand-write one for a site whose listing renders nothing.
+rather than the site. Do not hand-write one for a site whose listing renders nothing.
 
 ## 3. Run them
 
@@ -52,22 +96,51 @@ there but was not found. Do not hand-write one for a site whose listing renders 
 python scrape.py --headless --id <the built ids> --days 300 --max-articles 3
 ```
 
-Three articles each over a wide window: enough to see whether the documents are right,
-small enough to be quick. This writes to MySQL.
+Three articles each over a wide window: enough to judge the documents, quick enough to
+iterate. Read the per-site lines, not just the summary — `stored=0` and `parsed=0` mean
+different things.
 
-## 4. Clean the documents
+| Line | Meaning |
+|---|---|
+| `found=N parsed=0` | links found, nothing extracted — selectors have gone stale |
+| `skipped on '<phrase>'` | a `keywords.csv` skip rule dropped it |
+| `only N words -- dropped` | body at or under `MIN_WORDS` (100) |
+| `is dated ahead -- dropped` | date more than `MAX_DAYS_AHEAD` (7) out — usually a parse error |
+| `older than cutoff (N in a row)` | three in a row stops the site, so a misparsed date can cut a site short |
+
+## 4. Check and clean
 
 ```bash
 python check_output.py --id <each id>
 ```
 
-It flags leftovers, short bodies and dates that disagree with the url. **Read the actual
-body before acting on a flag** — a signatory list reads as "mostly very short lines" and is
-not junk, and a `[Category: ...]` line above the `* * *` is part of the lede template, not
-the body.
+**Read the actual body before acting on a flag.** Most flags are not junk:
 
-Fix what is fixable in `strip.csv`, then verify the rule by replaying it against the stored
-body rather than rerunning the scrape, which would only hit duplicates:
+| Flag | Usually |
+|---|---|
+| `mostly very short lines` | a real list — signatories, award categories, a meeting schedule, a data table |
+| `one date for the whole site` | a genuine same-day cluster; confirm the listing has a spread behind it |
+| `leftover: ...` | often real — check whether the phrase is a banner or part of a sentence |
+
+A `[Category: ...]` line above the `* * *` is part of the lede template, not the body.
+
+### Which tool fixes which problem
+
+| Problem | Tool |
+|---|---|
+| a junk line in the body | `strip.csv` body column |
+| a fixed phrase on every headline | `strip.csv` title column |
+| a whole element — a cookie table, a sidebar, a trailing date | `strip.csv` prune column |
+| an article that should not load at all | `keywords.csv` with `skip` |
+| a good article being dropped by a keyword | `keywords.csv` veto column |
+| wrong links, headline or date | the recipe |
+| a consent widget on many sites | `parse.WIDGET_ROOTS` |
+
+`strip.csv` is `a_id,body,title,prune`; `~` separates several patterns in a column; `*` as
+the a_id applies to every site.
+
+**Verify a rule by replaying it against the stored body**, not by rerunning the scrape,
+which would only hit duplicates:
 
 ```python
 from scraper import articles, config
@@ -78,35 +151,56 @@ conn = articles.connect(); cur = conn.cursor()
 cur.execute("SELECT pr_id,body_txt FROM press_release WHERE a_id=%s", (A_ID,))
 for pr, b in cur.fetchall():
     core = b.split("* * *", 1)[1].rsplit("\n***", 1)[0]
-    drop = patterns_for(strips, A_ID)
     for line in core.split("\n"):
-        if line.strip() and _dropped(line, drop):
+        if line.strip() and _dropped(line, patterns_for(strips, A_ID)):
             print(pr, "-", line[:90])
 ```
 
-Check what it drops, not just that it drops something. The stored document includes the
-`Original text here:` footer, which the strip never sees in the real pipeline, so ignore
-matches on that line.
+Check **what** it drops, not just that it drops something.
 
-### Three traps
+### Four traps that cost the most time
 
-- **`_norm` strips punctuation before matching.** `@battelle.org` becomes `battelleorg` and
-  matches any line mentioning `www.battelle.org`, including real paragraphs. `Office:`
-  becomes `office`, a common word. Write patterns that still read as distinctive with every
-  symbol removed.
-- **Do not strip a `Media Contact` heading.** `body._split_contact` uses that heading as its
-  anchor to move a trailing block into `contact_info`. Strip it and the phone numbers and
-  emails stay in the body instead.
-- **A contact block at the top of an article stays.** `_split_contact` only takes a trailing
-  block, on purpose. Use `strip.csv` for those.
+- **`_norm` strips punctuation before matching.** `@battelle.org` becomes `battelleorg`,
+  which also matches any line mentioning `www.battelle.org` — including real prose.
+  `Office:` becomes `office`, a common word. A pattern has to stay distinctive with every
+  symbol removed. A punctuation-only pattern like `###` normalizes to nothing and is
+  silently ignored.
+- **Do not strip a `Media Contact` heading.** `body._split_contact` uses that heading as
+  its anchor to move a trailing block into `contact_info`. Strip it and the phone numbers
+  and emails stay in the body instead. Check `contact_info` first: if it is already NULL
+  on every article, the splitter never fires there and stripping is safe.
+- **A contact block at the top of an article stays.** `_split_contact` only takes a
+  trailing block, deliberately, so a release that opens on one keeps its body. Those need
+  `strip.csv`.
+- **A keyword can mean something else on a given site.** `honor roll` at a children's
+  hospital is the U.S. News ranking, not a school list. Add a veto rather than removing
+  the site, and test both directions — the good article passes, the bad one still drops.
 
-When text cannot do it safely, look for a class to `prune` instead: fetch one article, find
-the element wrapping the junk, and add it to the fourth column.
+### Fixing a recipe rather than the output
 
-## 5. Remove what did not work, then report
+Some problems are the listing, not the body. A listing that mixes an events rail into a
+news feed gives dates that are not publication dates — a conference banner reading
+`December 2 - 3, 2026` parses as **year 3**. Three of those in a row trips the stale
+counter and stops the site before it reaches real news.
 
-Remove them yourself. Back the recipe JSON and the csv and strip rows up to the scratchpad
-first, so a site can be restored by pasting rather than rebuilding:
+Scope the selector to the real feed, then validate before saving:
+
+```python
+from build_recipes import MIN_PASSES, is_banner, verify_elsewhere
+passed, total, bodies, heads = verify_elsewhere(fetch, recipe, urls, link, drop, rows, dt)
+```
+
+Needs `passed >= min(MIN_PASSES, total)` and `is_banner` false. Save with
+`Store.save_recipe`, and clear the site's `failure` row.
+
+A listing with thousands of links is not automatically broken — some sites publish their
+whole archive on one page. Check the urls are unique and real, and that the dates descend.
+Newest-first means the stale counter stops the crawl after three old ones.
+
+## 5. Remove what cannot work
+
+Back the recipe JSON and the csv and strip rows up to the scratchpad first, so a site can
+be restored by pasting rather than rebuilding:
 
 ```bash
 python build_recipes.py --id <ids> --remove --headless
@@ -118,18 +212,23 @@ the build part way through.
 `--remove` does not touch MySQL. Name any leftover `press_release` rows rather than
 deleting them unasked.
 
-Then one message: what worked, and what was removed with a reason per site.
+### When a site cannot be made to work
+
+Say so plainly and move on. Do not reshape the recipe or add fields to `Recipe`.
+
+- Listing renders nothing, headed or headless.
+- No article list findable, and the page is too large or too odd to hand-write.
+- Articles are not press releases — link-out bulletins, or notices under the 100 word floor.
+- Every release is wire copy the skip keywords drop by design, such as a newsroom where
+  each item opens `/PRNewswire/`. That is the rule working, not a false positive.
+- Junk no `strip.csv` rule can remove without deleting real text.
+- Pagination, login, paywall, PDFs, or no date anywhere.
+
+## 6. Report
+
+One message: what worked, and what was removed with a reason per site.
 
 | a_id | site | reason |
 |---|---|---|
 
 **Only this batch.** Never re-list sites from an earlier one.
-
-## When a site cannot be made to work
-
-Say so plainly and move on. Do not reshape the recipe or add fields to `Recipe`.
-
-- Listing renders nothing, headed or headless.
-- No article list the builder can find, and the page is too large or too odd to hand-write.
-- Articles are not press releases — link-out bulletins or notices under the 100 word floor.
-- Junk that no `strip.csv` rule can remove without deleting real text.

@@ -1,6 +1,7 @@
 import mysql.connector
 from unidecode import unidecode
 
+from .config import LEDE_COLUMN
 from .config import mysql as mysql_config
 
 BODY_LIMIT = 65000
@@ -13,8 +14,8 @@ INSERT = (
     "(a_id, headline, content_date, body_txt, contact_info, filename, status, headline2) "
     "VALUES (%s, %s, %s, %s, %s, %s, %s, %s)"
 )
-AGENCIES = ("SELECT a_id, filename, CONVERT(leads USING latin1) FROM agencies "
-            "WHERE a_id IN (%s)")
+AGENCIES = ("SELECT a_id, filename, CONVERT(" + LEDE_COLUMN + " USING latin1) "
+            "FROM agencies WHERE a_id IN (%s)")
 EXISTING = "SELECT filename FROM press_release WHERE filename IN (%s)"
 
 
