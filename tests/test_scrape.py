@@ -4,7 +4,7 @@ import time
 from datetime import date, timedelta
 
 import scrape
-from scrape import Result, absorb, drain, notify, run_site
+from scrape import Result, absorb, drain, notify, run_site, stand_in
 from scraper import config, keywords
 from scraper.recipe import Recipe
 from scraper.report import Report
@@ -459,3 +459,20 @@ def test_the_email_body_is_the_whole_summary(monkeypatch):
     assert body.startswith("Load Version ")
     assert "Docs Loaded: 12" in body
     assert "Passed Parameters:" in body
+
+def test_a_site_with_no_agencies_row_gets_the_a_id_as_its_filename_prefix():
+    assert stand_in(39799, ("", "")) == ("TEST39799", "")
+
+
+def test_two_sites_with_no_agencies_row_do_not_share_a_prefix():
+    # an empty prefix is shared, so their filenames would collide on the unique key
+    from scraper.articles import filename
+    from datetime import date
+    when = date(2026, 9, 21)
+    a = filename(stand_in(39799, ("", ""))[0], when, "same tail")
+    b = filename(stand_in(39818, ("", ""))[0], when, "same tail")
+    assert a != b
+
+
+def test_a_real_prefix_is_left_alone():
+    assert stand_in(21459, ("HR-Barr-HKY", "A lede")) == ("HR-Barr-HKY", "A lede")

@@ -120,6 +120,12 @@ def scrape_site(browser, conn, a_id, url, recipe, cutoff, agency, drop, drop_tit
     return found, extracted, stored, duplicates, drops, routed, problems
 
 
+def stand_in(a_id, agency):
+    # no agencies row means no filename prefix either, and an empty one is shared, so
+    # two sites can collide on the unique key -- the a_id keeps their filenames apart
+    return (agency[0] or "TEST%d" % a_id, agency[1])
+
+
 def _names(rows, prefix, drop_title):
     # both fields come off the listing here, so the insert's filename is known before the fetch
     found = {}
@@ -269,8 +275,8 @@ def main():
     ap.add_argument("--site-timeout", type=int, default=config.SITE_TIMEOUT,
                     help="kill a site that has not finished in this many seconds")
     ap.add_argument("--allow-missing-lede", action="store_true",
-                    help="run sites with no lede on their agencies row, filling the"
-                         " opening with TKTK placeholders -- for testing, not for loading")
+                    help="run sites with no agencies row, using a TKTK stand-in lede and"
+                         " the a_id as the filename prefix -- for testing, not for loading")
     ap.add_argument("--in-process", action="store_true",
                     help="run sites in this process instead of isolating each one"
                          " -- faster, but one unresponsive site hangs its worker")
@@ -336,6 +342,7 @@ def main():
                 report.skip(a_id, "no lede")
                 history.site(a_id, SKIPPED, error="no lede")
                 continue
+            agency = stand_in(a_id, agency)
         ready.append((a_id, url, recipe, cutoff, agency,
                       patterns_for(strips, a_id), patterns_for(strips, a_id, "title"),
                       patterns_for(strips, a_id, "prune"), args.max_articles))
