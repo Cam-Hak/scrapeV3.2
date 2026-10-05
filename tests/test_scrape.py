@@ -93,7 +93,7 @@ class RaisingBrowser:
 
 def test_run_site_reports_the_exception_with_zero_counts():
     r = run_site(RaisingBrowser(), None, 101, "https://site.test", None, date(2026, 1, 1),
-                 ("ABC", "lede"), [], [], [])
+                 ("ABC", "lede", "u"), [], [], [])
     assert r.a_id == 101
     assert r.found == r.parsed == r.stored == r.dupes == 0
     assert r.problems == []
@@ -175,7 +175,7 @@ def listing_recipe():
 def test_an_empty_listing_is_fetched_again_patiently():
     browser = ListingBrowser(["<html><body></body></html>", LISTING, ARTICLE])
     run_site(browser, None, 101, "https://site.test/news", listing_recipe(),
-             date(2026, 9, 1), ("ABC", "lede"), (), (), ())
+             date(2026, 9, 1), ("ABC", "lede", "u"), (), (), ())
     assert browser.calls[0] == ("https://site.test/news", False)
     assert browser.calls[1] == ("https://site.test/news", True)
 
@@ -183,7 +183,7 @@ def test_an_empty_listing_is_fetched_again_patiently():
 def test_a_listing_that_yields_links_is_not_fetched_twice():
     browser = ListingBrowser([LISTING, ARTICLE])
     run_site(browser, None, 101, "https://site.test/news", listing_recipe(),
-             date(2026, 9, 1), ("ABC", "lede"), (), (), ())
+             date(2026, 9, 1), ("ABC", "lede", "u"), (), (), ())
     assert browser.calls[0] == ("https://site.test/news", False)
     assert browser.calls[1][0] == "https://site.test/a"
 
@@ -191,7 +191,7 @@ def test_a_listing_that_yields_links_is_not_fetched_twice():
 def test_an_empty_article_is_fetched_again_patiently():
     browser = ListingBrowser([LISTING, "<html><body></body></html>", ARTICLE])
     run_site(browser, None, 101, "https://site.test/news", listing_recipe(),
-             date(2026, 9, 1), ("ABC", "lede"), (), (), ())
+             date(2026, 9, 1), ("ABC", "lede", "u"), (), (), ())
     assert browser.calls[1] == ("https://site.test/a", False)
     assert browser.calls[2] == ("https://site.test/a", True)
 
@@ -199,7 +199,7 @@ def test_an_empty_article_is_fetched_again_patiently():
 def test_an_article_that_parses_is_not_fetched_twice():
     browser = ListingBrowser([LISTING, ARTICLE])
     run_site(browser, None, 101, "https://site.test/news", listing_recipe(),
-             date(2026, 9, 1), ("ABC", "lede"), (), (), ())
+             date(2026, 9, 1), ("ABC", "lede", "u"), (), (), ())
     assert [c for c in browser.calls if c[0] == "https://site.test/a"] == [
         ("https://site.test/a", False)]
 
@@ -212,21 +212,21 @@ def test_every_link_is_fetched_when_no_cap_is_given():
     browser = ListingBrowser([MANY, ARTICLE])
     # a cutoff ahead of the article date keeps the run off the database
     run_site(browser, None, 101, "https://site.test/news", listing_recipe(),
-             date(2026, 9, 10), ("ABC", "lede"), (), (), ())
+             date(2026, 9, 10), ("ABC", "lede", "u"), (), (), ())
     assert len(browser.calls) == 4
 
 
 def test_max_articles_caps_the_links_that_are_fetched():
     browser = ListingBrowser([MANY, ARTICLE])
     run_site(browser, None, 101, "https://site.test/news", listing_recipe(),
-             date(2026, 9, 10), ("ABC", "lede"), (), (), (), 2)
+             date(2026, 9, 10), ("ABC", "lede", "u"), (), (), (), 2)
     assert len(browser.calls) == 3
 
 
 def test_the_reported_link_count_is_the_full_listing_not_the_cap():
     browser = ListingBrowser([MANY, ARTICLE])
     result = run_site(browser, None, 101, "https://site.test/news", listing_recipe(),
-                      date(2026, 9, 10), ("ABC", "lede"), (), (), (), 2)
+                      date(2026, 9, 10), ("ABC", "lede", "u"), (), (), (), 2)
     assert result.found == 3
 
 
@@ -320,7 +320,7 @@ def row_recipe():
 
 def run(browser, conn, recipe=None, cutoff=date(2026, 9, 1)):
     return run_site(browser, conn, 101, "https://site.test/news", recipe or listing_recipe(),
-                    cutoff, ("ABC", "lede"), (), (), ())
+                    cutoff, ("ABC", "lede", "u"), (), (), ())
 
 
 def test_a_future_dated_article_is_not_stored():
@@ -461,7 +461,7 @@ def test_the_email_body_is_the_whole_summary(monkeypatch):
     assert "Passed Parameters:" in body
 
 def test_a_site_with_no_agencies_row_gets_the_a_id_as_its_filename_prefix():
-    assert stand_in(39799, ("", "")) == ("TEST39799", "")
+    assert stand_in(39799, ("", "", "")) == ("TEST39799", "", "test_uname")
 
 
 def test_two_sites_with_no_agencies_row_do_not_share_a_prefix():
@@ -470,9 +470,9 @@ def test_two_sites_with_no_agencies_row_do_not_share_a_prefix():
     from datetime import date
     when = date(2026, 9, 21)
     a = filename(stand_in(39799, ("", ""))[0], when, "same tail")
-    b = filename(stand_in(39818, ("", ""))[0], when, "same tail")
+    b = filename(stand_in(39818, ("", "", ""))[0], when, "same tail")
     assert a != b
 
 
 def test_a_real_prefix_is_left_alone():
-    assert stand_in(21459, ("HR-Barr-HKY", "A lede")) == ("HR-Barr-HKY", "A lede")
+    assert stand_in(21459, ("HR-Barr-HKY", "A lede", "")) == ("HR-Barr-HKY", "A lede", "test_uname")

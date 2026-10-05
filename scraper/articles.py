@@ -11,11 +11,11 @@ FILENAME_CHARS = 10
 COMMENT_LIMIT = 255
 INSERT = (
     "INSERT INTO press_release "
-    "(a_id, headline, content_date, body_txt, contact_info, filename, status, headline2) "
-    "VALUES (%s, %s, %s, %s, %s, %s, %s, %s)"
+    "(a_id, headline, content_date, body_txt, contact_info, filename, status, headline2, uname) "
+    "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)"
 )
-AGENCIES = ("SELECT a_id, filename, CONVERT(" + LEDE_COLUMN + " USING latin1) "
-            "FROM agencies WHERE a_id IN (%s)")
+AGENCIES = ("SELECT a_id, filename, CONVERT(" + LEDE_COLUMN + " USING latin1), uname "
+            "FROM agencies a LEFT JOIN url_grp g ON g.ug_id = a.ug_id WHERE a_id IN (%s)")
 EXISTING = "SELECT filename FROM press_release WHERE filename IN (%s)"
 
 
@@ -24,10 +24,11 @@ def connect():
 
 
 def load_agencies(conn, a_ids):
-    """Filename prefix and lede template per site -- both live on the agencies row."""
+    """Filename prefix, lede template and uname per site -- the uname comes from the url group."""
     cur = conn.cursor()
     cur.execute(AGENCIES % ",".join(["%s"] * len(a_ids)), tuple(a_ids))
-    found = {a: (prefix or "", lede or "") for a, prefix, lede in cur.fetchall()}
+    found = {a: (prefix or "", lede or "", uname or "")
+             for a, prefix, lede, uname in cur.fetchall()}
     cur.close()
     return found
 
@@ -55,7 +56,7 @@ def clean(text):
 
 
 def save_article(conn, a_id, prefix, headline, date, body, contact=None,
-                 status="D", comment=""):
+                 status="D", comment="", uname=None):
     headline = clean(headline)
     body = clean(body)
     contact = clean(contact).encode("latin1") if contact else None
@@ -66,7 +67,7 @@ def save_article(conn, a_id, prefix, headline, date, body, contact=None,
     cur = conn.cursor()
     try:
         cur.execute(INSERT, (a_id, headline[:255], date, body[:BODY_LIMIT], contact, name,
-                             status, comment))
+                             status, comment, uname))
         conn.commit()
         return True, None
     except mysql.connector.IntegrityError:

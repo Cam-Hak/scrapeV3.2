@@ -108,3 +108,9 @@ def test_known_filenames_come_back_as_a_set():
     conn = FakeConn(rows=[("$H a",), ("$H b",)])
     assert existing(conn, ["$H a", "$H b", "$H c"]) == {"$H a", "$H b"}
     assert conn.cur.args == ("$H a", "$H b", "$H c")
+
+
+def test_the_uname_reaches_the_insert():
+    conn = FakeConn()
+    save_article(conn, 1, "P", "A headline", WHEN, "A body", uname="jsmith")
+    assert conn.cur.args[8] == "jsmith"

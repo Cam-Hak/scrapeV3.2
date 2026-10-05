@@ -97,7 +97,7 @@ def scrape_site(browser, conn, a_id, url, recipe, cutoff, agency, drop, drop_tit
             body += " (%s)" % mark
         ok, reason = articles.save_article(
             conn, a_id, agency[0], item["headline"], item["date"], body, item["contact"],
-            status, comment
+            status, comment, agency[2]
         )
         if ok:
             stored += 1
@@ -123,7 +123,8 @@ def scrape_site(browser, conn, a_id, url, recipe, cutoff, agency, drop, drop_tit
 def stand_in(a_id, agency):
     # no agencies row means no filename prefix either, and an empty one is shared, so
     # two sites can collide on the unique key -- the a_id keeps their filenames apart
-    return (agency[0] or "TEST%d" % a_id, agency[1])
+    # a test run's docs are not real, so they must not be attributed to a real user
+    return (agency[0] or "TEST%d" % a_id, agency[1], "test_uname")
 
 
 def _names(rows, prefix, drop_title):
@@ -331,7 +332,7 @@ def main():
             report.skip(a_id, "marked failed, skipped")
             history.site(a_id, SKIPPED, error="marked failed")
             continue
-        agency = agencies.get(a_id, ("", ""))
+        agency = agencies.get(a_id, ("", "", ""))
         if not agency[1]:
             report.no_lede()
             # without a lede the document cannot be built, so the rows would be unusable
@@ -343,6 +344,14 @@ def main():
                 history.site(a_id, SKIPPED, error="no lede")
                 continue
             agency = stand_in(a_id, agency)
+        elif not agency[2]:
+            # every doc is tied to a user by the uname, so a site without one cannot load
+            log("")
+            log("%s %s" % (a_id, url))
+            log("  no uname on the agency's url group")
+            report.skip(a_id, "no uname")
+            history.site(a_id, SKIPPED, error="no uname")
+            continue
         ready.append((a_id, url, recipe, cutoff, agency,
                       patterns_for(strips, a_id), patterns_for(strips, a_id, "title"),
                       patterns_for(strips, a_id, "prune"), args.max_articles))
