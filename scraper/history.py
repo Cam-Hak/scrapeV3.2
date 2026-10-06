@@ -60,6 +60,8 @@ class History:
             "cutoff": str(getattr(report, "cutoff", "")),
             "days": days,
             "workers": workers,
+            # --senate: only the sites whose url carries house or senate
+            "senate": bool(getattr(report, "senate", False)),
             "sites": getattr(report, "sites", 0),
             "ran": getattr(report, "ran", 0),
             "skipped": getattr(report, "skipped", 0),

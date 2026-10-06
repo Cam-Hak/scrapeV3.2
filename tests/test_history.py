@@ -51,6 +51,15 @@ def test_finish_writes_one_run_summary(tmp_path):
     assert run["seconds"] >= 0
 
 
+def test_finish_records_whether_the_run_was_senate(tmp_path):
+    class SenateReport(FakeReport):
+        senate = True
+    History(directory=str(tmp_path)).finish(SenateReport())
+    # a report without the setting counts as an ordinary run
+    History(directory=str(tmp_path)).finish(FakeReport())
+    assert [r["senate"] for r in read(tmp_path / "runs.jsonl")] == [True, False]
+
+
 def test_runs_append_rather_than_overwrite(tmp_path):
     History(directory=str(tmp_path)).finish(FakeReport())
     History(directory=str(tmp_path)).finish(FakeReport())
