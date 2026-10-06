@@ -14,7 +14,8 @@ INSERT = (
     "(a_id, headline, content_date, body_txt, contact_info, filename, status, headline2, uname) "
     "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)"
 )
-AGENCIES = ("SELECT a_id, filename, CONVERT(" + LEDE_COLUMN + " USING latin1), uname, "
+# quoted, as one server's column is `lead` -- a reserved word in MySQL 8
+AGENCIES = ("SELECT a_id, filename, CONVERT(`" + LEDE_COLUMN + "` USING latin1), uname, "
             "g.descrip FROM agencies a LEFT JOIN url_grp g ON g.ug_id = a.ug_id "
             "WHERE a_id IN (%s)")
 EXISTING = "SELECT filename FROM press_release WHERE filename IN (%s)"

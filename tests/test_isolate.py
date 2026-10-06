@@ -18,6 +18,9 @@ def fake_child(monkeypatch, script):
     real = subprocess.Popen
 
     def popen(cmd, **kw):
+        # only the scraper's own child is faked -- the kill itself must run for real
+        if cmd[1:] != ["-m", "scraper.isolate"]:
+            return real(cmd, **kw)
         return real(["python3", "-c", script], **kw)
 
     monkeypatch.setattr(subprocess, "Popen", popen)

@@ -37,6 +37,10 @@ def _blank(a_id, url, error, note):
 
 
 def _kill_group(proc):
+    if os.name == "nt":
+        # Windows has no process groups; /T takes the child's Chrome down with it
+        subprocess.run(["taskkill", "/F", "/T", "/PID", str(proc.pid)], capture_output=True)
+        return
     try:
         os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
     except (ProcessLookupError, PermissionError, OSError):
