@@ -13,8 +13,9 @@ def smtp(monkeypatch):
     seen = {}
 
     class Fake:
-        def __init__(self, host, port):
+        def __init__(self, host, port, timeout=None):
             seen["server"] = (host, port)
+            seen["timeout"] = timeout
 
         def __enter__(self):
             return self
@@ -59,6 +60,11 @@ def test_the_summary_reaches_the_server(smtp):
     assert smtp["login"] == ("u", "p")
     assert smtp["sent"][0] == FROM
     assert smtp["sent"][1] == [TO]
+
+
+def test_the_connection_gives_up_rather_than_hanging_the_run(smtp):
+    mail.send(FROM, TO, "A subject", "A body")
+    assert smtp["timeout"] == mail.TIMEOUT
 
 
 def test_the_connection_is_secured_before_the_password_is_sent(smtp):

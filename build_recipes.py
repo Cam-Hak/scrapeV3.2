@@ -282,7 +282,7 @@ def main():
         store.close()
         return
     conn = articles.connect()
-    ledes = {a: lede for a, (_, lede) in
+    ledes = {a: agency[1] for a, agency in
              articles.load_agencies(conn, [a_id for a_id, _ in sites]).items()}
     conn.close()
     strips = load_strips(config.STRIP_CSV)

@@ -14,8 +14,9 @@ INSERT = (
     "(a_id, headline, content_date, body_txt, contact_info, filename, status, headline2, uname) "
     "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)"
 )
-AGENCIES = ("SELECT a_id, filename, CONVERT(" + LEDE_COLUMN + " USING latin1), uname "
-            "FROM agencies a LEFT JOIN url_grp g ON g.ug_id = a.ug_id WHERE a_id IN (%s)")
+AGENCIES = ("SELECT a_id, filename, CONVERT(" + LEDE_COLUMN + " USING latin1), uname, "
+            "g.descrip FROM agencies a LEFT JOIN url_grp g ON g.ug_id = a.ug_id "
+            "WHERE a_id IN (%s)")
 EXISTING = "SELECT filename FROM press_release WHERE filename IN (%s)"
 
 
@@ -24,11 +25,11 @@ def connect():
 
 
 def load_agencies(conn, a_ids):
-    """Filename prefix, lede template and uname per site -- the uname comes from the url group."""
+    """Filename prefix, lede template, uname and url group per site -- the last two come from the url group."""
     cur = conn.cursor()
     cur.execute(AGENCIES % ",".join(["%s"] * len(a_ids)), tuple(a_ids))
-    found = {a: (prefix or "", lede or "", uname or "")
-             for a, prefix, lede, uname in cur.fetchall()}
+    found = {a: (prefix or "", lede or "", uname or "", group or "")
+             for a, prefix, lede, uname, group in cur.fetchall()}
     cur.close()
     return found
 

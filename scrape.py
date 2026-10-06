@@ -127,6 +127,11 @@ def stand_in(a_id, agency):
     return (agency[0] or "TEST%d" % a_id, agency[1], "test_uname")
 
 
+def in_production(group):
+    # the old loader filtered with LIKE 'M-%', which ignores case, so this does too
+    return group.upper().startswith(config.PRODUCTION_GROUP)
+
+
 def _names(rows, prefix, drop_title):
     # both fields come off the listing here, so the insert's filename is known before the fetch
     found = {}
@@ -275,9 +280,9 @@ def main():
                     help="give up when no site has finished in this many seconds (0 = never)")
     ap.add_argument("--site-timeout", type=int, default=config.SITE_TIMEOUT,
                     help="kill a site that has not finished in this many seconds")
-    ap.add_argument("--allow-missing-lede", action="store_true",
-                    help="run sites with no agencies row, using a TKTK stand-in lede and"
-                         " the a_id as the filename prefix -- for testing, not for loading")
+    ap.add_argument("--testing", action="store_true",
+                    help="also run sites outside an M- url group or with no lede, loading"
+                         " them as test_uname -- for testing, not for loading")
     ap.add_argument("--in-process", action="store_true",
                     help="run sites in this process instead of isolating each one"
                          " -- faster, but one unresponsive site hangs its worker")
@@ -332,14 +337,25 @@ def main():
             report.skip(a_id, "marked failed, skipped")
             history.site(a_id, SKIPPED, error="marked failed")
             continue
-        agency = agencies.get(a_id, ("", "", ""))
+        prefix, lede, uname, url_group = agencies.get(a_id, ("", "", "", ""))
+        agency = (prefix, lede, uname)
+        if not in_production(url_group):
+            if not args.testing:
+                log("")
+                log("%s %s" % (a_id, url))
+                log("  not in an %s url group (%s) -- use --testing to run anyway"
+                    % (config.PRODUCTION_GROUP, url_group or "no url group"))
+                report.skip(a_id, "not in an %s url group" % config.PRODUCTION_GROUP)
+                history.site(a_id, SKIPPED, error="not in an %s url group" % config.PRODUCTION_GROUP)
+                continue
+            agency = stand_in(a_id, agency)
         if not agency[1]:
             report.no_lede()
             # without a lede the document cannot be built, so the rows would be unusable
-            if not args.allow_missing_lede:
+            if not args.testing:
                 log("")
                 log("%s %s" % (a_id, url))
-                log("  no lede on the agencies row -- use --allow-missing-lede to run anyway")
+                log("  no lede on the agencies row -- use --testing to run anyway")
                 report.skip(a_id, "no lede")
                 history.site(a_id, SKIPPED, error="no lede")
                 continue

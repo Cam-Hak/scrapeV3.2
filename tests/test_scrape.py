@@ -4,7 +4,7 @@ import time
 from datetime import date, timedelta
 
 import scrape
-from scrape import Result, absorb, drain, notify, run_site, stand_in
+from scrape import Result, absorb, drain, in_production, notify, run_site, stand_in
 from scraper import config, keywords
 from scraper.recipe import Recipe
 from scraper.report import Report
@@ -476,3 +476,14 @@ def test_two_sites_with_no_agencies_row_do_not_share_a_prefix():
 
 def test_a_real_prefix_is_left_alone():
     assert stand_in(21459, ("HR-Barr-HKY", "A lede", "")) == ("HR-Barr-HKY", "A lede", "test_uname")
+
+
+def test_only_an_m_url_group_is_scraped():
+    assert in_production("M-New") and in_production("M-Fixes")
+    assert in_production("m-issues")  # the old LIKE filter ignored case
+
+
+def test_any_other_url_group_or_none_is_not_scraped():
+    assert not in_production("X-Retired")
+    assert not in_production("New M-")
+    assert not in_production("")

@@ -38,6 +38,8 @@ def headless():
 
 # the agencies column holding the lede template, named differently on some servers
 LEDE_COLUMN = os.environ.get("SCRAPER_LEDE_COLUMN") or "lead"
+# only agencies whose url_grp.descrip starts with this are scraped, unless --testing
+PRODUCTION_GROUP = "M-"
 
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")
 LLM_MODEL = os.environ.get("SCRAPER_LLM_MODEL", "claude-haiku-4-5-20251001")

@@ -8,6 +8,7 @@ from email.mime.text import MIMEText
 from . import config
 
 ADDRESS = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+TIMEOUT = 30
 
 
 def addresses(value):
@@ -36,7 +37,8 @@ def send(from_addr, to_addr, subject, text, html="", cc_addr="",
         part["Content-Disposition"] = 'attachment; filename="%s"' % filename
         msg.attach(part)
     conf = config.mail()
-    with smtplib.SMTP(conf["host"], conf["port"]) as server:
+    # without a timeout a wrong or blocked port hangs the run at its very last step
+    with smtplib.SMTP(conf["host"], conf["port"], timeout=TIMEOUT) as server:
         server.starttls(context=ssl.create_default_context())
         server.login(conf["user"], conf["password"])
         # a Cc has to be in the envelope as well; the header alone does not deliver it

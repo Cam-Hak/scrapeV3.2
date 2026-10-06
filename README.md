@@ -53,6 +53,7 @@ three, so `--id 18092 --limit 5` silently runs one site.
 | `--senate` | Run only the sites whose url carries `house` or `senate` |
 | `--headless` | Run Chrome with no window |
 | `--production` | Email the run summary when the run finishes |
+| `--testing` | Also run sites outside an `M-` url group or with no lede, loaded as `test_uname` |
 
 `--headless` works on `build_recipes.py` too, and `SCRAPER_HEADLESS=1` in `.env` does the
 same thing without the flag. **A site behind Cloudflare will not let a headless browser
@@ -65,6 +66,12 @@ else; without it you get everything else and none of them, so the two runs toget
 cover the file exactly once. The words have to stand on their own, which is why
 `lighthouse.mq.edu.au` is not a chamber. `--id` overrides the split the same way it
 overrides the other selectors, so a site you name by id always runs.
+
+Only sites whose agency sits in a url group starting `M-` are scraped — the same rule
+the old system's `descrip LIKE 'M-%'` filter used. Anything else is skipped and named
+in the summary. `--testing` lifts that. Every site it lets through loads as
+`test_uname`, so nothing is credited to a real user, and a site with no lede gets a
+TKTK stand-in. It does still write to `press_release`.
 
 `--production` reads the seven `SCRAPER_MAIL_*` settings in `.env`. They are read at
 startup, so a missing one stops the run before it scrapes rather than after. The mail
@@ -164,9 +171,13 @@ Two runs a day, the congressional sites and the rest, an hour apart so they neve
 Chrome at the same time:
 
 ```
-0 4 * * *  cd /www/coder.tns/scrapeV3.2 && xvfb-run .venv/bin/python scrape.py --senate --days 2 --production
-0 5 * * *  cd /www/coder.tns/scrapeV3.2 && xvfb-run .venv/bin/python scrape.py --days 2 --production
+0 4 * * *  cd /www/coder.tns/scrapeV3.2 && xvfb-run .venv/bin/python scrape.py --senate --days 2 --production >> scrape.log 2>&1
+0 5 * * *  cd /www/coder.tns/scrapeV3.2 && xvfb-run .venv/bin/python scrape.py --days 2 --production >> scrape.log 2>&1
 ```
+
+Keep the `>> scrape.log 2>&1`. Cron throws a job's output away otherwise, and a mail
+that failed to send says why only in that output — look for
+`could not email the summary`.
 
 Repeating a day is harmless: the `filename` column is unique, so an article already
 loaded is counted as a duplicate rather than stored again, and a site whose articles
