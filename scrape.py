@@ -280,9 +280,6 @@ def main():
                     help="give up when no site has finished in this many seconds (0 = never)")
     ap.add_argument("--site-timeout", type=int, default=config.SITE_TIMEOUT,
                     help="kill a site that has not finished in this many seconds")
-    ap.add_argument("--testing", action="store_true",
-                    help="also run sites outside an M- url group or with no lede, loading"
-                         " them as test_uname -- for testing, not for loading")
     ap.add_argument("--in-process", action="store_true",
                     help="run sites in this process instead of isolating each one"
                          " -- faster, but one unresponsive site hangs its worker")
@@ -293,8 +290,9 @@ def main():
                     help="run only the sites whose url carries house or senate;"
                          " without it those are the sites left out")
     ap.add_argument("--production", action="store_true",
-                    help="email the run summary when the run finishes,"
-                         " to the addresses in SCRAPER_MAIL_TO")
+                    help="a real load: only sites in an M- url group, under their own uname,"
+                         " and the summary emailed to SCRAPER_MAIL_TO. Without it every run"
+                         " is a test and loads as test_uname")
     args = ap.parse_args()
     if args.headless:
         os.environ["SCRAPER_HEADLESS"] = "1"  # the isolated children inherit it
@@ -314,6 +312,13 @@ def main():
     conn = articles.connect()
     agencies = articles.load_agencies(conn, [a_id for a_id, _ in sites])
     conn.close()
+    if args.production:
+        # like the old loader's LIKE 'M-%', a site outside an M- group is never selected at all
+        kept = [s for s in sites if in_production(agencies.get(s[0], ("", "", "", ""))[3])]
+        if len(kept) < len(sites):
+            log("%d site(s) left out, not in an %s url group"
+                % (len(sites) - len(kept), config.PRODUCTION_GROUP))
+        sites = kept
     strips = load_strips(config.STRIP_CSV)
     keywords.load(config.KEYWORDS_CSV)
     report = Report(cutoff, len(sites), days=args.days, senate=args.senate)
@@ -337,30 +342,22 @@ def main():
             report.skip(a_id, "marked failed, skipped")
             history.site(a_id, SKIPPED, error="marked failed")
             continue
-        prefix, lede, uname, url_group = agencies.get(a_id, ("", "", "", ""))
+        prefix, lede, uname, _ = agencies.get(a_id, ("", "", "", ""))
         agency = (prefix, lede, uname)
-        if not in_production(url_group):
-            if not args.testing:
-                log("")
-                log("%s %s" % (a_id, url))
-                log("  not in an %s url group (%s) -- use --testing to run anyway"
-                    % (config.PRODUCTION_GROUP, url_group or "no url group"))
-                report.skip(a_id, "not in an %s url group" % config.PRODUCTION_GROUP)
-                history.site(a_id, SKIPPED, error="not in an %s url group" % config.PRODUCTION_GROUP)
-                continue
-            agency = stand_in(a_id, agency)
-        if not agency[1]:
+        if not lede:
             report.no_lede()
-            # without a lede the document cannot be built, so the rows would be unusable
-            if not args.testing:
-                log("")
-                log("%s %s" % (a_id, url))
-                log("  no lede on the agencies row -- use --testing to run anyway")
-                report.skip(a_id, "no lede")
-                history.site(a_id, SKIPPED, error="no lede")
-                continue
+        if not args.production:
+            # a run without --production is a test, so its docs never go to a real user
             agency = stand_in(a_id, agency)
-        elif not agency[2]:
+        elif not lede:
+            # without a lede the document cannot be built, so the rows would be unusable
+            log("")
+            log("%s %s" % (a_id, url))
+            log("  no lede on the agencies row")
+            report.skip(a_id, "no lede")
+            history.site(a_id, SKIPPED, error="no lede")
+            continue
+        elif not uname:
             # every doc is tied to a user by the uname, so a site without one cannot load
             log("")
             log("%s %s" % (a_id, url))

@@ -38,7 +38,7 @@ def headless():
 
 # the agencies column holding the lede template, named differently on some servers
 LEDE_COLUMN = os.environ.get("SCRAPER_LEDE_COLUMN") or "lead"
-# only agencies whose url_grp.descrip starts with this are scraped, unless --testing
+# a --production run only scrapes agencies whose url_grp.descrip starts with this
 PRODUCTION_GROUP = "M-"
 
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")

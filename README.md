@@ -52,8 +52,7 @@ three, so `--id 18092 --limit 5` silently runs one site.
 | `--retry-failed` | Clear the failure streaks first, so sites benched after 3 bad runs are tried again |
 | `--senate` | Run only the sites whose url carries `house` or `senate` |
 | `--headless` | Run Chrome with no window |
-| `--production` | Email the run summary when the run finishes |
-| `--testing` | Also run sites outside an `M-` url group or with no lede, loaded as `test_uname` |
+| `--production` | A real load: only `M-` url groups, real unames, summary emailed. Without it the run is a test |
 
 `--headless` works on `build_recipes.py` too, and `SCRAPER_HEADLESS=1` in `.env` does the
 same thing without the flag. **A site behind Cloudflare will not let a headless browser
@@ -65,13 +64,19 @@ a run is going.
 else; without it you get everything else and none of them, so the two runs together
 cover the file exactly once. The words have to stand on their own, which is why
 `lighthouse.mq.edu.au` is not a chamber. `--id` overrides the split the same way it
-overrides the other selectors, so a site you name by id always runs.
+overrides the other selectors, so a site you name by id always runs — except that
+`--production` still leaves it out if its url group is not `M-`.
 
-Only sites whose agency sits in a url group starting `M-` are scraped — the same rule
-the old system's `descrip LIKE 'M-%'` filter used. Anything else is skipped and named
-in the summary. `--testing` lifts that. Every site it lets through loads as
-`test_uname`, so nothing is credited to a real user, and a site with no lede gets a
-TKTK stand-in. It does still write to `press_release`.
+**`--production` is what makes a run real.** It runs only sites whose agency sits in a
+url group starting `M-` — the old system's `descrip LIKE 'M-%'` filter. Like that filter,
+it leaves the rest out before the run starts: the log gives a count, and the email never
+mentions them. Each doc loads under its agency's own `uname`, and a site with no lede or
+no uname is skipped.
+
+**Every run without `--production` is a test.** Every site runs whatever its url group,
+every doc loads as `test_uname` so nothing is credited to a real user, and a site with
+no lede gets a TKTK stand-in. It still writes to `press_release`, so run tests against a
+test database. `build_recipes.py` ignores url groups entirely.
 
 `--production` reads the seven `SCRAPER_MAIL_*` settings in `.env`. They are read at
 startup, so a missing one stops the run before it scrapes rather than after. The mail
