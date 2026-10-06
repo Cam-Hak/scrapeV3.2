@@ -63,3 +63,51 @@ def test_a_write_that_fails_cannot_kill_the_run(tmp_path):
     h.site(101, ERROR, error="boom")
     h.finish(FakeReport())
     assert h.write_errors == 2  # counted, not raised
+
+
+def test_each_run_gets_a_log_named_by_its_run_id(tmp_path):
+    h = History(directory=str(tmp_path), log_dir="logs")
+    h.log("site 101 started\n")
+    h.log("site 101 done\n")
+    h.finish(FakeReport())
+    h.close()
+    assert h.log_path == "logs/%s.log" % h.run_id
+    text = (tmp_path / h.log_path).read_text()
+    assert "site 101 started" in text and "site 101 done" in text
+    # the run record points at it, relative to the checkout, so the dashboard can link it
+    assert read(tmp_path / "runs.jsonl")[0]["log"] == h.log_path
+
+
+def test_lines_logged_after_finish_still_land_in_the_file(tmp_path):
+    # main() logs the summary after finish(); it must not be lost
+    h = History(directory=str(tmp_path), log_dir="logs")
+    h.finish(FakeReport())
+    h.log("summary\n")
+    h.close()
+    assert "summary" in (tmp_path / h.log_path).read_text()
+
+
+def test_without_a_log_dir_nothing_is_written_and_the_record_says_so(tmp_path):
+    h = History(directory=str(tmp_path))
+    h.log("ignored\n")
+    h.finish(FakeReport())
+    assert h.log_path is None
+    assert read(tmp_path / "runs.jsonl")[0]["log"] is None
+    assert not (tmp_path / "logs").exists()
+
+
+def test_old_logs_are_pruned_to_the_newest_few(tmp_path):
+    import os, time as _t
+    d = tmp_path / "logs"
+    d.mkdir()
+    for i in range(5):
+        f = d / ("old%d.log" % i)
+        f.write_text("x")
+        os.utime(f, (_t.time() - 1000 + i, _t.time() - 1000 + i))
+    h = History(directory=str(tmp_path), log_dir="logs", log_keep=3)
+    h.close()
+    left = sorted(p.name for p in d.iterdir())
+    # the new run's own log plus the two newest old ones survive
+    assert len(left) == 3
+    assert h.run_id + ".log" in left
+    assert "old0.log" not in left and "old4.log" in left

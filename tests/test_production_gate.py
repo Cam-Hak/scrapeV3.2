@@ -62,6 +62,13 @@ def run(monkeypatch, tmp_path, argv, mailed=None, store=FakeStore):
         def finish(self, *a, **k):
             pass
 
+        # the run's log file: scrape.log() copies every line here, and main() closes it
+        def log(self, line):
+            pass
+
+        def close(self):
+            pass
+
     def fake_isolated(job, timeout):
         queued[job[0]] = job[4]
         return isolate._blank(job[0], job[1], None, "faked")

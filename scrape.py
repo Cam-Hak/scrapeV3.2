@@ -22,8 +22,17 @@ from scraper.strip import clean_title, load_strips, patterns_for
 from scraper.store import Store
 
 
+# the running History, when there is one, so log() can copy every line into this
+# run's log file. Child processes (scraper/isolate.py) never set it: their lines
+# come back in the Result and are logged once, here, by the parent.
+_history = None
+
+
 def log(msg):
-    print(msg + "\n", end="", flush=True)  # one write so threads can't interleave inside a line
+    line = msg + "\n"
+    print(line, end="", flush=True)  # one write so threads can't interleave inside a line
+    if _history:
+        _history.log(line)
 
 
 def page_title(html):
@@ -330,7 +339,10 @@ def main():
 
     # only build_recipes.py writes recipes.db
     store = Store(config.SQLITE_PATH, readonly=True)
-    history = History(runs=config.RUNS_LOG, sites=config.RUN_SITES_LOG)
+    global _history
+    history = History(runs=config.RUNS_LOG, sites=config.RUN_SITES_LOG,
+                      log_dir=config.LOG_DIR, log_keep=config.LOG_KEEP)
+    _history = history
     conn = articles.connect()
     agencies = articles.load_agencies(conn, [a_id for a_id, _ in sites])
     conn.close()
@@ -439,6 +451,8 @@ def main():
         log(line)
     if mailing:
         notify(mailing, report, history.run_id, lines)
+    # closed last, so the summary and mail notice above land in the log file too
+    history.close()
     if crashed:
         sys.exit(1)
 

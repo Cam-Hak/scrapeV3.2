@@ -78,3 +78,8 @@ STALL_LIMIT = 600
 
 # hard ceiling on one site when each runs in its own process (scraper/isolate.py)
 SITE_TIMEOUT = 180
+
+# one log file per run, named by run_id, linked from the dashboard. Pruned to
+# the newest LOG_KEEP because the box runs near-full.
+LOG_DIR = "logs"
+LOG_KEEP = 60
