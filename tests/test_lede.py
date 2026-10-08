@@ -47,3 +47,11 @@ def test_the_filename_is_prefix_then_yymmdd_then_the_headline_tail():
 def test_a_headline_shorter_than_the_tail_is_used_whole():
     assert filename("PP-VC", WHEN, "Our Hero") == "$H PP-VC260910Our Hero"
     assert len("Our Hero") < FILENAME_CHARS
+
+
+def test_a_double_quote_never_reaches_the_filename():
+    # TNS shows the filename in a form field, and a straight " ended it early
+    headline = 'PMA Metal Stamping Conference to Celebrate 10th Anniversary With "Best Of" Program'
+    name = filename("ASSN-PMA-VPR-", date(2026, 10, 5), headline)
+    assert '"' not in name
+    assert name == "$H ASSN-PMA-VPR-261005Of Program"

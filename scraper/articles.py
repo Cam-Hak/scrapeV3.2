@@ -47,8 +47,10 @@ def existing(conn, names):
 
 
 def filename(prefix, date, headline):
-    # the unique key on press_release, so this is what stops an article loading twice
-    return "$H %s%s%s" % (prefix, date.strftime("%y%m%d"), headline[-FILENAME_CHARS:])
+    # the unique key on press_release, so this is what stops an article loading twice;
+    # a " cuts the name short in the TNS form, and saving it there lets the article load again
+    tail = headline.replace('"', "")[-FILENAME_CHARS:]
+    return "$H %s%s%s" % (prefix, date.strftime("%y%m%d"), tail)
 
 
 def clean(text):
