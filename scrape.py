@@ -1,6 +1,7 @@
 import argparse
 import os
 import queue
+import sqlite3
 import threading
 import time
 from collections import namedtuple
@@ -163,16 +164,24 @@ def run_site(browser, conn, a_id, url, recipe, cutoff, agency, drop, drop_title,
                   head + lines)
 
 
+def record(store, report, a_id, ok):
+    try:
+        store.record_result(a_id, ok)
+    except sqlite3.OperationalError as e:
+        # a recipes.db the run cannot write costs the streaks, not the run and its email
+        report.problem("recipes.db", "failure streaks not saved -- %s" % e)
+
+
 def absorb(r, store, report, history=None):
     if r.error:
-        store.record_result(r.a_id, False)
+        record(store, report, r.a_id, False)
         report.error(r.a_id, r.error)
         state = ERROR
     else:
         # links but nothing parsed or recognised means the selectors have gone stale;
         # a site we already hold every article for never parses one, and is not stale
         healthy = r.found > 0 and (r.parsed > 0 or r.dupes > 0)
-        store.record_result(r.a_id, healthy)
+        record(store, report, r.a_id, healthy)
         report.site(r.a_id, r.found, r.parsed, r.stored, r.dupes)
         report.dropped(r.drops)
         report.sent(r.routed)
@@ -308,7 +317,10 @@ def main():
     store = Store(config.SQLITE_PATH, config.MAX_FAILURES)
     history = History(runs=config.RUNS_LOG, sites=config.RUN_SITES_LOG)
     if args.retry_failed:
-        store.clear_failures()
+        try:
+            store.clear_failures()
+        except sqlite3.OperationalError as e:
+            log("could not clear the failure streaks, benched sites stay benched: %s" % e)
     conn = articles.connect()
     agencies = articles.load_agencies(conn, [a_id for a_id, _ in sites])
     conn.close()

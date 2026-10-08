@@ -1,3 +1,4 @@
+import sqlite3
 import sys
 
 import scrape
@@ -121,3 +122,12 @@ def test_naming_a_site_with_id_does_not_bypass_the_gate(monkeypatch, tmp_path):
 def test_the_senate_half_is_gated_too(monkeypatch, tmp_path):
     queued, skipped, mailed = run(monkeypatch, tmp_path, ["--production", "--senate"])
     assert sorted(queued) == [1007]
+
+
+def test_a_read_only_recipes_db_does_not_stop_retry_failed(monkeypatch, tmp_path):
+    def refuse(self):
+        raise sqlite3.OperationalError("attempt to write a readonly database")
+
+    monkeypatch.setattr(FakeStore, "clear_failures", refuse)
+    queued, skipped, mailed = run(monkeypatch, tmp_path, ["--retry-failed"])
+    assert sorted(queued) == [1001, 1002, 1003, 1004, 1005, 1006]

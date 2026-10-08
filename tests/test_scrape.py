@@ -1,4 +1,6 @@
+import os
 import queue
+import stat
 import threading
 import time
 from datetime import date, timedelta
@@ -8,6 +10,7 @@ from scrape import Result, absorb, drain, in_production, notify, run_site, stand
 from scraper import config, keywords
 from scraper.recipe import Recipe
 from scraper.report import Report
+from scraper.store import Store
 
 
 class FakeStore:
@@ -487,3 +490,20 @@ def test_any_other_url_group_or_none_is_not_scraped():
     assert not in_production("X-Retired")
     assert not in_production("New M-")
     assert not in_production("")
+
+
+def test_a_read_only_recipes_db_costs_the_streaks_not_the_run(tmp_path):
+    # production once could read recipes.db but not write it, and the first streak killed the run
+    path = str(tmp_path / "recipes.db")
+    Store(path).close()
+    os.chmod(path, stat.S_IREAD)
+    try:
+        store, report = Store(path), Report(date(2026, 10, 8), 2)
+        absorb(result(), store, report)
+        absorb(result(a_id=102, error="TimeoutError: slow"), store, report)
+        store.close()
+    finally:
+        os.chmod(path, stat.S_IREAD | stat.S_IWRITE)
+    assert report.ran == 1 and report.errors == 1
+    assert [why for a_id, why in report.problems if a_id == "recipes.db"] == [
+        "failure streaks not saved -- attempt to write a readonly database"]
