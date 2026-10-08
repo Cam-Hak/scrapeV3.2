@@ -1,6 +1,8 @@
 import sqlite3
 import sys
 
+import pytest
+
 import scrape
 from scraper import isolate
 from scraper.history import SKIPPED
@@ -47,10 +49,11 @@ class FakeConn:
         pass
 
 
-def run(monkeypatch, tmp_path, argv):
+def run(monkeypatch, tmp_path, argv, mailed=None):
     listing = tmp_path / "sites.csv"
     listing.write_text("".join("%s,%s\n" % site for site in SITES))
-    queued, skipped, mailed = {}, {}, []
+    queued, skipped = {}, {}
+    mailed = [] if mailed is None else mailed
 
     class FakeHistory:
         run_id = "test"
@@ -131,3 +134,27 @@ def test_a_read_only_recipes_db_does_not_stop_retry_failed(monkeypatch, tmp_path
     monkeypatch.setattr(FakeStore, "clear_failures", refuse)
     queued, skipped, mailed = run(monkeypatch, tmp_path, ["--retry-failed"])
     assert sorted(queued) == [1001, 1002, 1003, 1004, 1005, 1006]
+
+
+def test_one_unreadable_recipe_does_not_stop_the_other_sites(monkeypatch, tmp_path):
+    def recipe(self, a_id):
+        if a_id == 1002:
+            raise ValueError("Expecting value: line 1 column 1 (char 0)")
+        return "recipe"
+
+    monkeypatch.setattr(FakeStore, "get_recipe", recipe)
+    queued, skipped, mailed = run(monkeypatch, tmp_path, [])
+    assert skipped == {1002: "recipe unreadable"}
+    assert sorted(queued) == [1001, 1003, 1004, 1005, 1006]
+
+
+def test_a_crash_mid_run_still_ends_with_the_summary_and_the_email(monkeypatch, tmp_path):
+    def boom(ready):
+        raise RuntimeError("can't start new thread")
+
+    monkeypatch.setattr(scrape, "by_host", boom)
+    mailed = []
+    with pytest.raises(SystemExit) as ended:
+        run(monkeypatch, tmp_path, ["--production"], mailed)
+    assert ended.value.code == 1
+    assert "stopped early -- RuntimeError: can't start new thread" in "\n".join(mailed)

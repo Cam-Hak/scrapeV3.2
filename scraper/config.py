@@ -16,6 +16,8 @@ def mysql():
         user=os.environ["SCRAPER_DB_USER"],
         password=os.environ["SCRAPER_DB_PASSWORD"],
         database=os.environ["SCRAPER_TNS_DB"],
+        # a database that never answers must fail the call, not hang the run
+        connection_timeout=60,
     )
 
 

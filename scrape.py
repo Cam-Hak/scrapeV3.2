@@ -2,8 +2,10 @@ import argparse
 import os
 import queue
 import sqlite3
+import sys
 import threading
 import time
+import traceback
 from collections import namedtuple
 from datetime import date, timedelta
 
@@ -209,7 +211,13 @@ def worker(jobs, results, site_timeout=None):
                 except queue.Empty:
                     return
                 for job in group:
-                    results.put(Result(**run_site_isolated(job, site_timeout)))
+                    try:
+                        results.put(Result(**run_site_isolated(job, site_timeout)))
+                    except Exception as e:
+                        # a site that cannot even be started must not take the worker's other sites with it
+                        why = "%s: %s" % (type(e).__name__, e)
+                        results.put(Result(job[0], 0, 0, 0, 0, {}, {}, [], why,
+                                           ["", "%s %s" % (job[0], job[1]), "  ERROR " + why]))
             return
         with Browser() as browser:
             conn = articles.connect()
@@ -259,7 +267,13 @@ def drain(threads, results, store, report, history=None, stall_limit=None):
                 return
             continue
         last = time.time()
-        absorb(r, store, report, history)
+        try:
+            absorb(r, store, report, history)
+        except Exception as e:
+            # a result that cannot be recorded costs that site's line, not the run
+            why = "%s: %s" % (type(e).__name__, e)
+            log("  %s result not recorded -- %s" % (r.a_id, why))
+            report.problem(r.a_id, "result not recorded -- " + why)
 
 
 def notify(conf, report, run_id, lines):
@@ -336,81 +350,97 @@ def main():
     report = Report(cutoff, len(sites), days=args.days, senate=args.senate)
     log("%d site(s), keeping articles on or after %s" % (len(sites), cutoff))
 
-    jobs = queue.Queue()
-    ready = []
-    for a_id, url in sites:
-        recipe = store.get_recipe(a_id)
-        if not recipe:
-            log("")
-            log("%s %s" % (a_id, url))
-            log("  no recipe -- run build_recipes.py --id %s" % a_id)
-            report.skip(a_id, "no recipe")
-            history.site(a_id, SKIPPED, error="no recipe")
-            continue
-        if store.is_failed(a_id):
-            log("")
-            log("%s %s" % (a_id, url))
-            log("  marked failed, skipping -- use --retry-failed")
-            report.skip(a_id, "marked failed, skipped")
-            history.site(a_id, SKIPPED, error="marked failed")
-            continue
-        prefix, lede, uname, _ = agencies.get(a_id, ("", "", "", ""))
-        agency = (prefix, lede, uname)
-        if not lede:
-            report.no_lede()
-        if not args.production:
-            # a run without --production is a test, so its docs never go to a real user
-            agency = stand_in(a_id, agency)
-        elif not lede:
-            # without a lede the document cannot be built, so the rows would be unusable
-            log("")
-            log("%s %s" % (a_id, url))
-            log("  no lede on the agencies row")
-            report.skip(a_id, "no lede")
-            history.site(a_id, SKIPPED, error="no lede")
-            continue
-        elif not uname:
-            # every doc is tied to a user by the uname, so a site without one cannot load
-            log("")
-            log("%s %s" % (a_id, url))
-            log("  no uname on the agency's url group")
-            report.skip(a_id, "no uname")
-            history.site(a_id, SKIPPED, error="no uname")
-            continue
-        ready.append((a_id, url, recipe, cutoff, agency,
-                      patterns_for(strips, a_id), patterns_for(strips, a_id, "title"),
-                      patterns_for(strips, a_id, "prune"), args.max_articles))
-    for group in by_host(ready):
-        jobs.put(group)
-
-    results = queue.Queue()
-    # daemon: a worker wedged inside a page load can never be joined, and a
-    # non-daemon thread would keep the process alive after the summary printed
-    site_timeout = 0 if args.in_process else args.site_timeout
-    if site_timeout:
-        # a killed Chrome never removes its profile, and they run to hundreds of
-        # MB -- a previous run's leftovers would otherwise fill the disk
-        swept = sweep_profiles()
-        if swept:
-            log("cleared %d stale browser profile(s) from a previous run" % swept)
-    threads = [threading.Thread(target=worker, args=(jobs, results, site_timeout), daemon=True)
-               for _ in range(max(1, args.workers))]
-    for t in threads:
-        t.start()
-        time.sleep(1)  # Chrome launch is the one thing several workers must not do at once
+    crashed = False
     try:
-        drain(threads, results, store, report, history, args.stall_limit)
-    except KeyboardInterrupt:
-        log("interrupted -- letting workers finish their current group, then stopping")
-        for job in stop(jobs):
-            report.skip(job[0], "not run -- interrupted")
-            history.site(job[0], SKIPPED, error="not run -- interrupted")
-        drain(threads, results, store, report, history, args.stall_limit)
-    finally:
-        stop(jobs)
+        jobs = queue.Queue()
+        ready = []
+        for a_id, url in sites:
+            try:
+                recipe = store.get_recipe(a_id)
+            except (ValueError, TypeError) as e:
+                # one bad recipe row must not stop every other site; a broken database still stops the run
+                log("")
+                log("%s %s" % (a_id, url))
+                log("  recipe unreadable -- %s: %s" % (type(e).__name__, e))
+                report.skip(a_id, "recipe unreadable")
+                history.site(a_id, SKIPPED, error="recipe unreadable")
+                continue
+            if not recipe:
+                log("")
+                log("%s %s" % (a_id, url))
+                log("  no recipe -- run build_recipes.py --id %s" % a_id)
+                report.skip(a_id, "no recipe")
+                history.site(a_id, SKIPPED, error="no recipe")
+                continue
+            if store.is_failed(a_id):
+                log("")
+                log("%s %s" % (a_id, url))
+                log("  marked failed, skipping -- use --retry-failed")
+                report.skip(a_id, "marked failed, skipped")
+                history.site(a_id, SKIPPED, error="marked failed")
+                continue
+            prefix, lede, uname, _ = agencies.get(a_id, ("", "", "", ""))
+            agency = (prefix, lede, uname)
+            if not lede:
+                report.no_lede()
+            if not args.production:
+                # a run without --production is a test, so its docs never go to a real user
+                agency = stand_in(a_id, agency)
+            elif not lede:
+                # without a lede the document cannot be built, so the rows would be unusable
+                log("")
+                log("%s %s" % (a_id, url))
+                log("  no lede on the agencies row")
+                report.skip(a_id, "no lede")
+                history.site(a_id, SKIPPED, error="no lede")
+                continue
+            elif not uname:
+                # every doc is tied to a user by the uname, so a site without one cannot load
+                log("")
+                log("%s %s" % (a_id, url))
+                log("  no uname on the agency's url group")
+                report.skip(a_id, "no uname")
+                history.site(a_id, SKIPPED, error="no uname")
+                continue
+            ready.append((a_id, url, recipe, cutoff, agency,
+                          patterns_for(strips, a_id), patterns_for(strips, a_id, "title"),
+                          patterns_for(strips, a_id, "prune"), args.max_articles))
+        for group in by_host(ready):
+            jobs.put(group)
+
+        results = queue.Queue()
+        # daemon: a worker wedged inside a page load can never be joined, and a
+        # non-daemon thread would keep the process alive after the summary printed
+        site_timeout = 0 if args.in_process else args.site_timeout
+        if site_timeout:
+            # a killed Chrome never removes its profile, and they run to hundreds of
+            # MB -- a previous run's leftovers would otherwise fill the disk
+            swept = sweep_profiles()
+            if swept:
+                log("cleared %d stale browser profile(s) from a previous run" % swept)
+        threads = [threading.Thread(target=worker, args=(jobs, results, site_timeout), daemon=True)
+                   for _ in range(max(1, args.workers))]
         for t in threads:
-            # bounded: a wedged worker would never return from join()
-            t.join(timeout=5)
+            t.start()
+            time.sleep(1)  # Chrome launch is the one thing several workers must not do at once
+        try:
+            drain(threads, results, store, report, history, args.stall_limit)
+        except KeyboardInterrupt:
+            log("interrupted -- letting workers finish their current group, then stopping")
+            for job in stop(jobs):
+                report.skip(job[0], "not run -- interrupted")
+                history.site(job[0], SKIPPED, error="not run -- interrupted")
+            drain(threads, results, store, report, history, args.stall_limit)
+        finally:
+            stop(jobs)
+            for t in threads:
+                # bounded: a wedged worker would never return from join()
+                t.join(timeout=5)
+    except Exception as e:
+        # whatever goes wrong, the run still ends with its summary, email and history
+        crashed = True
+        log(traceback.format_exc())
+        report.problem("run", "stopped early -- %s: %s" % (type(e).__name__, e))
 
     store.close()
     history.finish(report, days=args.days, workers=args.workers)
@@ -420,6 +450,8 @@ def main():
         log(line)
     if mailing:
         notify(mailing, report, history.run_id, lines)
+    if crashed:
+        sys.exit(1)
 
 
 if __name__ == "__main__":

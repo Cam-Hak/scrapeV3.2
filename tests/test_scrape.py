@@ -507,3 +507,35 @@ def test_a_read_only_recipes_db_costs_the_streaks_not_the_run(tmp_path):
     assert report.ran == 1 and report.errors == 1
     assert [why for a_id, why in report.problems if a_id == "recipes.db"] == [
         "failure streaks not saved -- attempt to write a readonly database"]
+
+
+def test_a_site_that_cannot_be_started_does_not_stop_its_worker(monkeypatch):
+    def isolated(job, timeout):
+        if job[0] == 1:
+            raise OSError("Cannot allocate memory")
+        return dict(a_id=job[0], found=1, parsed=1, stored=1, dupes=0, drops={}, routed={},
+                    problems=[], error=None, lines=[])
+
+    monkeypatch.setattr(scrape, "run_site_isolated", isolated)
+    jobs, results = queue.Queue(), queue.Queue()
+    jobs.put([(1, "https://a.test/one"), (2, "https://a.test/two")])
+    scrape.worker(jobs, results, site_timeout=180)
+    first, second = results.get_nowait(), results.get_nowait()
+    assert first.error == "OSError: Cannot allocate memory"
+    assert second.stored == 1
+
+
+def test_a_result_that_cannot_be_recorded_does_not_stop_the_run():
+    results = queue.Queue()
+    results.put(result(a_id=1, found=None))
+    results.put(result(a_id=2))
+    report = Report(date(2026, 10, 8), 2)
+    drain([], results, FakeStore(), report)
+    assert report.ran == 1
+    assert [a for a, why in report.problems if why.startswith("result not recorded")] == [1]
+
+
+def test_a_database_that_never_answers_cannot_hang_the_run(monkeypatch):
+    for name in ("SCRAPER_DB_HOST", "SCRAPER_DB_USER", "SCRAPER_DB_PASSWORD", "SCRAPER_TNS_DB"):
+        monkeypatch.setenv(name, "x")
+    assert config.mysql()["connection_timeout"] == 60
