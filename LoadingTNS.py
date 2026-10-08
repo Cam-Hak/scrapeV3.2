@@ -3,7 +3,7 @@ import logging
 
 from dotenv import load_dotenv
 import os
-import global_info
+from scraper import config
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
@@ -38,8 +38,8 @@ def selenium_config_tns() -> webdriver:
     options.add_argument("--width=1920")
     options.add_argument("--height=1080")
 
-    # 5. Headless Toggle — honor the -H flag (shared via global_info)
-    if global_info.run_headless:
+    # 5. Headless Toggle — the same switch as the scraper: --headless or SCRAPER_HEADLESS=1
+    if config.headless():
         options.add_argument("--headless")
 
     driver = webdriver.Firefox(options=options)
