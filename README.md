@@ -172,13 +172,18 @@ Worker count is bounded by Chrome, not by Python. Each browser is roughly 300-50
 
 ### On a schedule
 
-Two runs a day, the congressional sites and the rest, an hour apart so they never start
-Chrome at the same time:
+Two runs a day, the congressional sites and then the rest, from one cron line so the
+second starts only when the first has finished:
 
 ```
-0 4 * * *  cd /www/coder.tns/scrapeV3.2 && xvfb-run .venv/bin/python scrape.py --senate --days 2 --production >> scrape.log 2>&1
-0 5 * * *  cd /www/coder.tns/scrapeV3.2 && xvfb-run .venv/bin/python scrape.py --days 2 --production >> scrape.log 2>&1
+0 4 * * *  cd /www/coder.tns/scrapeV3.2 && { xvfb-run -a .venv/bin/python scrape.py --senate --days 2 --production; xvfb-run -a .venv/bin/python scrape.py --days 2 --production; } >> scrape.log 2>&1
 ```
+
+**Do not split this into two timed lines.** The senate run takes about an hour, and
+`xvfb-run` always claims the same display. If the first run is still going when the
+second starts, the second dies with `Xvfb failed to start` before Python runs, so
+there's no scrape and no email. Two overlapping runs would also both write
+`recipes.db`. The `-a` picks a free display, in case anything else is holding one.
 
 Keep the `>> scrape.log 2>&1`. Cron throws a job's output away otherwise, and a mail
 that failed to send says why only in that output — look for
