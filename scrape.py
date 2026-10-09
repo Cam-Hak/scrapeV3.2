@@ -27,6 +27,11 @@ def log(msg):
     print(msg + "\n", end="", flush=True)  # one write so threads can't interleave inside a line
 
 
+def page_title(html):
+    tag = BeautifulSoup(html or "", "html.parser").title
+    return tag.get_text(" ", strip=True)[:80] if tag else ""
+
+
 def scrape_site(browser, conn, a_id, url, recipe, cutoff, agency, drop, drop_title, prune, lines, cap=None):
     listing = browser.get(url)
     rows = find_items(listing, url, recipe)
@@ -35,6 +40,9 @@ def scrape_site(browser, conn, a_id, url, recipe, cutoff, agency, drop, drop_tit
         listing = browser.get(url, patient=True)
         rows = find_items(listing, url, recipe)
         lines.append("  listing was empty -- fetched again patiently")
+        if not rows:
+            # the title tells a bot wall ("Just a moment...", "Access Denied") from a changed page
+            lines.append("  page title %r, %d bytes" % (page_title(listing), len(listing or "")))
     # the site's date habit is re-read every run, so a stale flag cannot outlive one
     if recipe.date_on_listing and set_dayfirst(recipe, [BeautifulSoup(listing, "html.parser")]):
         lines.append("  numeric dates read %s first -- recipe flag corrected" % ("day" if recipe.dayfirst else "month"))
@@ -170,8 +178,10 @@ def record(store, report, a_id, ok):
     try:
         store.record_result(a_id, ok)
     except sqlite3.OperationalError as e:
-        # a recipes.db the run cannot write costs the streaks, not the run and its email
-        report.problem("recipes.db", "failure streaks not saved -- %s" % e)
+        # a recipes.db the run cannot write costs the streaks, not the run and its email;
+        # the code says why: READONLY (the file), _DIRECTORY (its folder) or _DBMOVED (replaced mid-run)
+        report.problem("recipes.db", "failure streaks not saved -- %s (%s)"
+                       % (e, getattr(e, "sqlite_errorname", "unknown")))
 
 
 def absorb(r, store, report, history=None):

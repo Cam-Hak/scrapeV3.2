@@ -506,7 +506,7 @@ def test_a_read_only_recipes_db_costs_the_streaks_not_the_run(tmp_path):
         os.chmod(path, stat.S_IREAD | stat.S_IWRITE)
     assert report.ran == 1 and report.errors == 1
     assert [why for a_id, why in report.problems if a_id == "recipes.db"] == [
-        "failure streaks not saved -- attempt to write a readonly database"]
+        "failure streaks not saved -- attempt to write a readonly database (SQLITE_READONLY)"]
 
 
 def test_a_site_that_cannot_be_started_does_not_stop_its_worker(monkeypatch):
@@ -539,3 +539,18 @@ def test_a_database_that_never_answers_cannot_hang_the_run(monkeypatch):
     for name in ("SCRAPER_DB_HOST", "SCRAPER_DB_USER", "SCRAPER_DB_PASSWORD", "SCRAPER_TNS_DB"):
         monkeypatch.setenv(name, "x")
     assert config.mysql()["connection_timeout"] == 60
+
+
+def test_a_listing_that_stays_empty_says_what_the_page_was():
+    wall = "<html><head><title>Just a moment...</title></head><body></body></html>"
+    r = run_site(ListingBrowser([wall]), None, 101, "https://site.test/news", listing_recipe(),
+                 date(2026, 9, 1), ("ABC", "lede", "u"), (), (), ())
+    assert r.found == 0
+    assert any("page title 'Just a moment...'" in line for line in r.lines)
+
+
+def test_a_listing_found_on_the_retry_does_not_report_a_title():
+    browser = ListingBrowser(["<html><body></body></html>", LISTING, ARTICLE])
+    r = run_site(browser, None, 101, "https://site.test/news", listing_recipe(),
+                 date(2026, 9, 1), ("ABC", "lede", "u"), (), (), ())
+    assert not any("page title" in line for line in r.lines)
