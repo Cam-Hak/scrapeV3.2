@@ -158,3 +158,25 @@ def test_a_crash_mid_run_still_ends_with_the_summary_and_the_email(monkeypatch, 
         run(monkeypatch, tmp_path, ["--production"], mailed)
     assert ended.value.code == 1
     assert "stopped early -- RuntimeError: can't start new thread" in "\n".join(mailed)
+
+
+def test_the_log_opens_with_the_version(monkeypatch, tmp_path, capsys):
+    run(monkeypatch, tmp_path, [])
+    assert capsys.readouterr().out.splitlines()[0] == scrape.config.VERSION_LINE
+
+
+def test_a_run_that_fails_at_startup_still_says_its_version(monkeypatch, tmp_path, capsys):
+    def unreadable(path):
+        raise OSError("strip.csv unreadable")
+
+    monkeypatch.setattr(scrape, "load_strips", unreadable)
+    with pytest.raises(OSError):
+        run(monkeypatch, tmp_path, [])
+    assert capsys.readouterr().out.splitlines()[0] == scrape.config.VERSION_LINE
+
+
+def test_with_streaks_off_a_benched_site_still_runs(monkeypatch, tmp_path):
+    # the shipped default: an old streak in recipes.db no longer keeps a site out of a run
+    monkeypatch.setattr(FakeStore, "is_failed", lambda self, a_id: a_id == 1002)
+    queued, skipped, mailed = run(monkeypatch, tmp_path, [])
+    assert 1002 in queued and skipped == {}

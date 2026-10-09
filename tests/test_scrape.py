@@ -5,12 +5,20 @@ import threading
 import time
 from datetime import date, timedelta
 
+import pytest
+
 import scrape
 from scrape import Result, absorb, drain, in_production, notify, run_site, stand_in
 from scraper import config, keywords
 from scraper.recipe import Recipe
 from scraper.report import Report
 from scraper.store import Store
+
+
+@pytest.fixture(autouse=True)
+def streaks_on(monkeypatch):
+    # these tests cover the failure-streak bookkeeping, which ships switched off for now
+    monkeypatch.setattr(config, "FAILURE_STREAKS", True)
 
 
 class FakeStore:
@@ -554,3 +562,12 @@ def test_a_listing_found_on_the_retry_does_not_report_a_title():
     r = run_site(browser, None, 101, "https://site.test/news", listing_recipe(),
                  date(2026, 9, 1), ("ABC", "lede", "u"), (), (), ())
     assert not any("page title" in line for line in r.lines)
+
+
+def test_with_streaks_off_a_run_writes_nothing_to_recipes_db(monkeypatch):
+    monkeypatch.setattr(config, "FAILURE_STREAKS", False)
+    store, report = FakeStore(), Report(date(2026, 10, 9), 2)
+    absorb(result(), store, report)
+    absorb(result(a_id=102, error="TimeoutError: slow"), store, report)
+    assert store.results == []
+    assert report.ran == 1 and report.errors == 1

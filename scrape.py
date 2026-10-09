@@ -175,6 +175,8 @@ def run_site(browser, conn, a_id, url, recipe, cutoff, agency, drop, drop_title,
 
 
 def record(store, report, a_id, ok):
+    if not config.FAILURE_STREAKS:
+        return
     try:
         store.record_result(a_id, ok)
     except sqlite3.OperationalError as e:
@@ -327,6 +329,8 @@ def main():
                          " and the summary emailed to SCRAPER_MAIL_TO. Without it every run"
                          " is a test and loads as test_uname")
     args = ap.parse_args()
+    # first, so even a run that fails at startup says which code it was
+    log(config.VERSION_LINE)
     if args.headless:
         os.environ["SCRAPER_HEADLESS"] = "1"  # the isolated children inherit it
     # read up front, so a missing setting fails before an hour of scraping rather than after
@@ -340,7 +344,7 @@ def main():
 
     store = Store(config.SQLITE_PATH, config.MAX_FAILURES)
     history = History(runs=config.RUNS_LOG, sites=config.RUN_SITES_LOG)
-    if args.retry_failed:
+    if args.retry_failed and config.FAILURE_STREAKS:
         try:
             store.clear_failures()
         except sqlite3.OperationalError as e:
@@ -382,7 +386,7 @@ def main():
                 report.skip(a_id, "no recipe")
                 history.site(a_id, SKIPPED, error="no recipe")
                 continue
-            if store.is_failed(a_id):
+            if config.FAILURE_STREAKS and store.is_failed(a_id):
                 log("")
                 log("%s %s" % (a_id, url))
                 log("  marked failed, skipping -- use --retry-failed")

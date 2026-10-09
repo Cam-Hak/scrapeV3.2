@@ -1,7 +1,7 @@
 import time
 from datetime import datetime
 
-from .config import MIN_WORDS, SHORT_DOC, VERSION, VERSION_DATE
+from .config import MIN_WORDS, SHORT_DOC, VERSION_LINE
 
 INDENT = "       "
 
@@ -63,7 +63,7 @@ class Report:
             self.empty.append(a_id)
 
     def lines(self):
-        out = ["Load Version %s %s" % (VERSION, VERSION_DATE)]
+        out = [VERSION_LINE]
         out += self._indent(self._loaded())
         out += ["", "Passed Parameters:"] + self._indent(self._parameters())
         out += ["", "Sites:"] + self._indent(self._ran())

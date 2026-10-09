@@ -49,7 +49,7 @@ three, so `--id 18092 --limit 5` silently runs one site.
 |---|---|
 | `--days n` | Keep articles from the last n days (default 3) |
 | `--workers n` | Sites in parallel (default 4). Use 1 to run one at a time. |
-| `--retry-failed` | Clear the failure streaks first, so sites benched after 3 bad runs are tried again |
+| `--retry-failed` | Clear the failure streaks first, so sites benched after 3 bad runs are tried again. Does nothing while `FAILURE_STREAKS` is off in `scraper/config.py` — currently off, so a run neither writes `recipes.db` nor benches any site |
 | `--senate` | Run only the sites whose url carries `house` or `senate` |
 | `--headless` | Run Chrome with no window |
 | `--production` | A real load: only `M-` url groups, real unames, summary emailed. Without it the run is a test |
@@ -111,8 +111,9 @@ Passed Parameters:
 actually fetched and parsed, so the gap is what the duplicate pre-check saved. Counts
 show even at zero, so a section going quiet is visible.
 
-`VERSION` and `VERSION_DATE` live in `scraper/config.py` — bump both when the desk
-should see a new version on the summary.
+`VERSION` and `VERSION_DATE` live in `scraper/config.py`. Both go up on every push —
+the last number by one, the date to the day of the push. Every run prints them as the
+first line of its log as well as atop the summary, so a log always says which code made it.
 
 Sites are grouped by host, so two entries on one host never run at the same time
 no matter how many workers you give it.
