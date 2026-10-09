@@ -1,3 +1,4 @@
+import re
 import sys
 import time
 
@@ -8,6 +9,9 @@ from .config import REQUEST_DELAY
 
 TURNSTILE = '[name="cf-turnstile-response"]'
 CHALLENGE = "cdn-cgi/challenge-platform"
+# a form with a Turnstile box carries the marker too, on a page that has already loaded,
+# so only Cloudflare's own interstitial counts as a challenge
+INTERSTITIAL = re.compile(r"<title[^>]*>\s*(just a moment|attention required)", re.I)
 SETTLE = 2
 CHALLENGE_WAIT = 30
 POLL = 0.3
@@ -19,6 +23,10 @@ SIZE = "document.documentElement.outerHTML.length"
 # headless never clears Cloudflare, so run headed and park the window off-screen
 OFFSCREEN = (["--window-position=-3000,-3000", "--window-size=1400,1000"]
              if sys.platform == "win32" else None)
+
+
+def challenged(html):
+    return CHALLENGE in html and INTERSTITIAL.search(html) is not None
 
 
 def settled(size, sleep, stable=STABLE_READS, polls=SETTLE_POLLS):
@@ -87,15 +95,15 @@ class Browser:
     def _past_challenge(self):
         # a Cloudflare interstitial can outlast the settle poll, so wait for the real page
         html = self.sb.get_html()
-        if CHALLENGE not in html:
+        if not challenged(html):
             return False
         deadline = time.time() + CHALLENGE_WAIT
-        while CHALLENGE in html and time.time() < deadline:
+        while challenged(html) and time.time() < deadline:
             if self.sb.is_element_visible(TURNSTILE):
                 self.sb.solve_captcha()
             self.sb.sleep(SETTLE)
             html = self.sb.get_html()
-        return CHALLENGE not in html
+        return not challenged(html)
 
     def close(self):
         if self.sb:

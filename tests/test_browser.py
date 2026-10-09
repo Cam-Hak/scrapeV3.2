@@ -1,4 +1,4 @@
-from scraper.browser import (Browser, CHALLENGE, PATIENT_POLLS, SETTLE_POLLS, settled,
+from scraper.browser import (Browser, CHALLENGE, PATIENT_POLLS, SETTLE_POLLS, challenged, settled,
                              wait_for)
 
 
@@ -88,12 +88,18 @@ def test_a_session_that_keeps_failing_is_torn_down():
     assert b.sb is None
 
 
+WALL = "<html><head><title>Just a moment...</title></head><body>%s</body></html>" % CHALLENGE
+# a loaded page whose form embeds a Turnstile box -- it carries the marker but is no challenge
+FORM = "<html><head><title>AG Settlement</title></head><body><form>%s</form></body></html>" % CHALLENGE
+
+
 class TracingSb:
-    # get_html returns the challenge marker for the first `challenge_reads` reads, then the real page
-    def __init__(self, challenge_reads):
+    # get_html returns the interstitial for the first `challenge_reads` reads, then `page`
+    def __init__(self, challenge_reads, page="<html>real</html>"):
         self.calls = []
         self.challenge_reads = challenge_reads
         self.reads = 0
+        self.page = page
 
     def open(self, url):
         self.calls.append("open")
@@ -108,7 +114,7 @@ class TracingSb:
     def get_html(self):
         self.calls.append("get_html")
         self.reads += 1
-        return CHALLENGE if self.reads <= self.challenge_reads else "<html>real</html>"
+        return WALL if self.reads <= self.challenge_reads else self.page
 
     def is_element_visible(self, selector):
         return False
@@ -135,6 +141,22 @@ def test_an_unchallenged_page_settles_exactly_once():
     b = browser_on(sb)
     b.get("https://site.test/a")
     assert settle_passes(sb.calls) == 1
+
+
+def test_a_page_whose_form_carries_a_turnstile_box_is_not_waited_on():
+    # attorneygeneral.gov lost 30 seconds on every article to this
+    sb = TracingSb(challenge_reads=0, page=FORM)
+    b = browser_on(sb)
+    b.get("https://site.test/a")
+    assert settle_passes(sb.calls) == 1
+    assert sb.calls.count("get_html") == 2
+
+
+def test_only_cloudflare_s_own_interstitial_counts_as_a_challenge():
+    assert challenged(WALL)
+    assert challenged(WALL.replace("Just a moment...", "Attention Required! | Cloudflare"))
+    assert not challenged(FORM)
+    assert not challenged("<html><head><title>Just a moment...</title></head></html>")
 
 
 def test_a_patient_settle_waits_for_a_longer_quiet_run():
