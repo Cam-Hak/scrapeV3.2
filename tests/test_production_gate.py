@@ -1,4 +1,5 @@
-import sqlite3
+import os
+import stat
 import sys
 
 import pytest
@@ -6,7 +7,9 @@ import pytest
 import scrape
 from scraper import isolate
 from scraper.history import SKIPPED
+from scraper.recipe import Recipe
 from scraper.sites import load_sites
+from scraper.store import Store
 
 SITES = [(1001, "https://a.test/news"), (1002, "https://b.test/news"),
          (1003, "https://c.test/news"), (1004, "https://d.test/news"),
@@ -25,20 +28,11 @@ AGENCIES = {
 
 
 class FakeStore:
-    def __init__(self, *a):
-        pass
-
-    def clear_failures(self):
+    def __init__(self, *a, **k):
         pass
 
     def get_recipe(self, a_id):
         return "recipe"
-
-    def is_failed(self, a_id):
-        return False
-
-    def record_result(self, a_id, ok):
-        pass
 
     def close(self):
         pass
@@ -49,7 +43,7 @@ class FakeConn:
         pass
 
 
-def run(monkeypatch, tmp_path, argv, mailed=None):
+def run(monkeypatch, tmp_path, argv, mailed=None, store=FakeStore):
     listing = tmp_path / "sites.csv"
     listing.write_text("".join("%s,%s\n" % site for site in SITES))
     queued, skipped = {}, {}
@@ -72,7 +66,7 @@ def run(monkeypatch, tmp_path, argv, mailed=None):
         queued[job[0]] = job[4]
         return isolate._blank(job[0], job[1], None, "faked")
 
-    monkeypatch.setattr(scrape, "Store", FakeStore)
+    monkeypatch.setattr(scrape, "Store", store)
     monkeypatch.setattr(scrape, "History", FakeHistory)
     # the real selector code, so --id, --senate and the rest filter as they do in a run
     monkeypatch.setattr(scrape, "load_sites", lambda path, *a, **k: load_sites(str(listing), *a, **k))
@@ -127,13 +121,22 @@ def test_the_senate_half_is_gated_too(monkeypatch, tmp_path):
     assert sorted(queued) == [1007]
 
 
-def test_a_read_only_recipes_db_does_not_stop_retry_failed(monkeypatch, tmp_path):
-    def refuse(self):
-        raise sqlite3.OperationalError("attempt to write a readonly database")
-
-    monkeypatch.setattr(FakeStore, "clear_failures", refuse)
-    queued, skipped, mailed = run(monkeypatch, tmp_path, ["--retry-failed"])
-    assert sorted(queued) == [1001, 1002, 1003, 1004, 1005, 1006]
+def test_a_run_reads_a_read_only_recipes_db_and_leaves_it_unchanged(monkeypatch, tmp_path):
+    # production's recipes.db could not be written, and a run that wrote to it crashed
+    path = tmp_path / "recipes.db"
+    store = Store(str(path))
+    store.save_recipe(1001, Recipe("a.post", "", "h1", "time"))
+    store.close()
+    before = path.read_bytes()
+    os.chmod(path, stat.S_IREAD)
+    monkeypatch.setattr(scrape.config, "SQLITE_PATH", str(path))
+    try:
+        # --retry-failed does nothing now, but an old command line passing it must still start
+        queued, skipped, mailed = run(monkeypatch, tmp_path, ["--retry-failed"], store=Store)
+    finally:
+        os.chmod(path, stat.S_IREAD | stat.S_IWRITE)
+    assert sorted(queued) == [1001]
+    assert path.read_bytes() == before
 
 
 def test_one_unreadable_recipe_does_not_stop_the_other_sites(monkeypatch, tmp_path):
@@ -173,10 +176,3 @@ def test_a_run_that_fails_at_startup_still_says_its_version(monkeypatch, tmp_pat
     with pytest.raises(OSError):
         run(monkeypatch, tmp_path, [])
     assert capsys.readouterr().out.splitlines()[0] == scrape.config.VERSION_LINE
-
-
-def test_with_streaks_off_a_benched_site_still_runs(monkeypatch, tmp_path):
-    # the shipped default: an old streak in recipes.db no longer keeps a site out of a run
-    monkeypatch.setattr(FakeStore, "is_failed", lambda self, a_id: a_id == 1002)
-    queued, skipped, mailed = run(monkeypatch, tmp_path, [])
-    assert 1002 in queued and skipped == {}

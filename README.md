@@ -49,7 +49,7 @@ three, so `--id 18092 --limit 5` silently runs one site.
 |---|---|
 | `--days n` | Keep articles from the last n days (default 3) |
 | `--workers n` | Sites in parallel (default 4). Use 1 to run one at a time. |
-| `--retry-failed` | Clear the failure streaks first, so sites benched after 3 bad runs are tried again. Does nothing while `FAILURE_STREAKS` is off in `scraper/config.py` — currently off, so a run neither writes `recipes.db` nor benches any site |
+| `--retry-failed` | Does nothing. Kept so an older command line that still passes it does not stop the run |
 | `--senate` | Run only the sites whose url carries `house` or `senate` |
 | `--headless` | Run Chrome with no window |
 | `--production` | A real load: only `M-` url groups, real unames, summary emailed. Without it the run is a test |
@@ -126,7 +126,7 @@ half-written, so it can take a minute; you still get the summary.
 | Flag | Effect |
 |---|---|
 | `--force` | Rebuild recipes that already exist, instead of skipping them |
-| `--remove` | Drop the selected sites everywhere and exit, building nothing: their recipe and failure streak in `recipes.db`, their row in `test-sites.csv`, and their rows in `strip.csv`. Needs one of the four selectors above; it refuses to run against the whole file. `ledes.csv` is left alone, because its entries span several lines. |
+| `--remove` | Drop the selected sites everywhere and exit, building nothing: their recipe in `recipes.db`, their row in `test-sites.csv`, and their rows in `strip.csv`. Needs one of the four selectors above; it refuses to run against the whole file. `ledes.csv` is left alone, because its entries span several lines. |
 
 ## Keyword routing -- `keywords.csv`
 
@@ -183,8 +183,7 @@ second starts only when the first has finished:
 **Do not split this into two timed lines.** The senate run takes about an hour, and
 `xvfb-run` always claims the same display. If the first run is still going when the
 second starts, the second dies with `Xvfb failed to start` before Python runs, so
-there's no scrape and no email. Two overlapping runs would also both write
-`recipes.db`. The `-a` picks a free display, in case anything else is holding one.
+there's no scrape and no email. The `-a` picks a free display, in case anything else is holding one.
 
 Keep the `>> scrape.log 2>&1`. Cron throws a job's output away otherwise, and a mail
 that failed to send says why only in that output — look for
@@ -194,15 +193,16 @@ Repeating a day is harmless: the `filename` column is unique, so an article alre
 loaded is counted as a duplicate rather than stored again, and a site whose articles
 were all duplicates is not treated as broken.
 
-**`recipes.db` is committed, and a run writes to it** — every site's pass/fail streak
-lands there. A deploy that pulls has to overwrite rather than merge:
+**`recipes.db` is committed, and only `build_recipes.py` writes it.** A scrape run opens
+it read-only, so a server's copy never changes and `git pull` updates it cleanly. Nothing
+a run writes is tracked: `runs.jsonl`, `run_sites.jsonl` and `*.log` are all gitignored.
+
+A server whose `git pull` refuses has a locally changed file that upstream changed too.
+Check what it is with `git status --short`, then match the server to the repo:
 
 ```bash
 git fetch origin && git reset --hard origin/main
 ```
-
-That discards the streaks, which rebuild over three runs. Nothing else a run writes is
-tracked: `runs.jsonl`, `run_sites.jsonl` and `*.log` are all gitignored.
 
 ## DB Commands
 *If sqlite3 isn't installed run one of these commands*

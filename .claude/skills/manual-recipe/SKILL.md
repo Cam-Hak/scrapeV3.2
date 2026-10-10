@@ -319,10 +319,8 @@ from scraper.recipe import Recipe
 from scraper.store import Store
 
 recipe = Recipe(**json.load(open(os.path.join(WORK, "recipe.json"), encoding="utf-8")))
-store = Store(config.SQLITE_PATH, config.MAX_FAILURES)
+store = Store(config.SQLITE_PATH)
 store.save_recipe(A_ID, recipe)
-store.db.execute("DELETE FROM failure WHERE a_id = ?", (A_ID,))
-store.db.commit()
 store.close()
 print("saved", A_ID)
 ```

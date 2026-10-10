@@ -191,7 +191,7 @@ passed, total, bodies, heads = verify_elsewhere(fetch, recipe, urls, link, drop,
 ```
 
 Needs `passed >= min(MIN_PASSES, total)` and `is_banner` false. Save with
-`Store.save_recipe`, and clear the site's `failure` row.
+`Store.save_recipe`.
 
 A listing with thousands of links is not automatically broken — some sites publish their
 whole archive on one page. Check the urls are unique and real, and that the dates descend.

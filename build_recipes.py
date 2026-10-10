@@ -272,7 +272,7 @@ def main():
         print("--remove needs --id, --from, --last or --limit")
         return
 
-    store = Store(config.SQLITE_PATH, config.MAX_FAILURES)
+    store = Store(config.SQLITE_PATH)
     if args.remove:
         for a_id, url in sites:
             log("%s %s" % (a_id, "recipe removed" if store.remove_recipe(a_id) else "had no recipe"))

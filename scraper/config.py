@@ -47,20 +47,15 @@ ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")
 LLM_MODEL = os.environ.get("SCRAPER_LLM_MODEL", "claude-haiku-4-5-20251001")
 LLM_WORKSPACE_ID = os.environ.get("SCRAPER_LLM_WORKSPACE_ID")
 
-# off for now: a run writes nothing to recipes.db and benches no site, so that file cannot
-# crash it -- turn back on once the failure streaks are stored somewhere a run can write
-FAILURE_STREAKS = False
-
 # bumped on every push: the last number goes up by one, the date is the day of the push
-VERSION = "3.2.1"
-VERSION_DATE = "10/09/2026"
+VERSION = "3.2.2"
+VERSION_DATE = "10/10/2026"
 VERSION_LINE = "Load Version %s %s" % (VERSION, VERSION_DATE)
 
 SQLITE_PATH = "recipes.db"
 SITES_CSV = "test-sites.csv"
 REQUEST_DELAY = 2
 DEFAULT_DAYS = 3
-MAX_FAILURES = 3
 WORKERS = 4
 
 STOP_AFTER_OLD = 3

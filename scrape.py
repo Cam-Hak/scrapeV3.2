@@ -1,7 +1,6 @@
 import argparse
 import os
 import queue
-import sqlite3
 import sys
 import threading
 import time
@@ -174,28 +173,14 @@ def run_site(browser, conn, a_id, url, recipe, cutoff, agency, drop, drop_title,
                   head + lines)
 
 
-def record(store, report, a_id, ok):
-    if not config.FAILURE_STREAKS:
-        return
-    try:
-        store.record_result(a_id, ok)
-    except sqlite3.OperationalError as e:
-        # a recipes.db the run cannot write costs the streaks, not the run and its email;
-        # the code says why: READONLY (the file), _DIRECTORY (its folder) or _DBMOVED (replaced mid-run)
-        report.problem("recipes.db", "failure streaks not saved -- %s (%s)"
-                       % (e, getattr(e, "sqlite_errorname", "unknown")))
-
-
-def absorb(r, store, report, history=None):
+def absorb(r, report, history=None):
     if r.error:
-        record(store, report, r.a_id, False)
         report.error(r.a_id, r.error)
         state = ERROR
     else:
         # links but nothing parsed or recognised means the selectors have gone stale;
         # a site we already hold every article for never parses one, and is not stale
         healthy = r.found > 0 and (r.parsed > 0 or r.dupes > 0)
-        record(store, report, r.a_id, healthy)
         report.site(r.a_id, r.found, r.parsed, r.stored, r.dupes)
         report.dropped(r.drops)
         report.sent(r.routed)
@@ -261,7 +246,7 @@ def stop(jobs):
             return dropped
 
 
-def drain(threads, results, store, report, history=None, stall_limit=None):
+def drain(threads, results, report, history=None, stall_limit=None):
     # a worker that dies must not hang the drain, so watch the threads rather than a count
     last = time.time()
     while any(t.is_alive() for t in threads) or not results.empty():
@@ -280,7 +265,7 @@ def drain(threads, results, store, report, history=None, stall_limit=None):
             continue
         last = time.time()
         try:
-            absorb(r, store, report, history)
+            absorb(r, report, history)
         except Exception as e:
             # a result that cannot be recorded costs that site's line, not the run
             why = "%s: %s" % (type(e).__name__, e)
@@ -304,7 +289,8 @@ def notify(conf, report, run_id, lines):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--days", type=int, default=config.DEFAULT_DAYS)
-    ap.add_argument("--retry-failed", action="store_true")
+    ap.add_argument("--retry-failed", action="store_true",
+                    help="does nothing now -- kept so an older command line still starts")
     ap.add_argument("--id", type=int, nargs="+")
     ap.add_argument("--from", dest="start", type=int)
     ap.add_argument("--last", type=int)
@@ -342,13 +328,9 @@ def main():
         print("no matching sites")
         return
 
-    store = Store(config.SQLITE_PATH, config.MAX_FAILURES)
+    # only build_recipes.py writes recipes.db
+    store = Store(config.SQLITE_PATH, readonly=True)
     history = History(runs=config.RUNS_LOG, sites=config.RUN_SITES_LOG)
-    if args.retry_failed and config.FAILURE_STREAKS:
-        try:
-            store.clear_failures()
-        except sqlite3.OperationalError as e:
-            log("could not clear the failure streaks, benched sites stay benched: %s" % e)
     conn = articles.connect()
     agencies = articles.load_agencies(conn, [a_id for a_id, _ in sites])
     conn.close()
@@ -385,13 +367,6 @@ def main():
                 log("  no recipe -- run build_recipes.py --id %s" % a_id)
                 report.skip(a_id, "no recipe")
                 history.site(a_id, SKIPPED, error="no recipe")
-                continue
-            if config.FAILURE_STREAKS and store.is_failed(a_id):
-                log("")
-                log("%s %s" % (a_id, url))
-                log("  marked failed, skipping -- use --retry-failed")
-                report.skip(a_id, "marked failed, skipped")
-                history.site(a_id, SKIPPED, error="marked failed")
                 continue
             prefix, lede, uname, _ = agencies.get(a_id, ("", "", "", ""))
             agency = (prefix, lede, uname)
@@ -438,13 +413,13 @@ def main():
             t.start()
             time.sleep(1)  # Chrome launch is the one thing several workers must not do at once
         try:
-            drain(threads, results, store, report, history, args.stall_limit)
+            drain(threads, results, report, history, args.stall_limit)
         except KeyboardInterrupt:
             log("interrupted -- letting workers finish their current group, then stopping")
             for job in stop(jobs):
                 report.skip(job[0], "not run -- interrupted")
                 history.site(job[0], SKIPPED, error="not run -- interrupted")
-            drain(threads, results, store, report, history, args.stall_limit)
+            drain(threads, results, report, history, args.stall_limit)
         finally:
             stop(jobs)
             for t in threads:

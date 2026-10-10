@@ -1,5 +1,6 @@
 import os
 import queue
+import sqlite3
 import stat
 import threading
 import time
@@ -13,20 +14,6 @@ from scraper import config, keywords
 from scraper.recipe import Recipe
 from scraper.report import Report
 from scraper.store import Store
-
-
-@pytest.fixture(autouse=True)
-def streaks_on(monkeypatch):
-    # these tests cover the failure-streak bookkeeping, which ships switched off for now
-    monkeypatch.setattr(config, "FAILURE_STREAKS", True)
-
-
-class FakeStore:
-    def __init__(self):
-        self.results = []
-
-    def record_result(self, a_id, ok):
-        self.results.append((a_id, ok))
 
 
 class FakeReport:
@@ -62,38 +49,35 @@ def result(**over):
     return Result(**fields)
 
 
-def test_an_errored_result_records_failure_and_reports_the_error():
-    store, report = FakeStore(), FakeReport()
-    absorb(result(error="RuntimeError: boom", found=0, parsed=0, stored=0, dupes=0), store, report)
-    assert store.results == [(101, False)]
+def test_an_errored_result_reports_the_error():
+    report = FakeReport()
+    absorb(result(error="RuntimeError: boom", found=0, parsed=0, stored=0, dupes=0), report)
     assert report.errors == [(101, "RuntimeError: boom")]
     assert report.sites == []
 
 
-def test_a_healthy_result_records_success_and_reports_the_site(monkeypatch, capsys):
-    store, report = FakeStore(), FakeReport()
+def test_a_healthy_result_reports_the_site(monkeypatch, capsys):
+    report = FakeReport()
     real_print = print
     calls = []
     monkeypatch.setattr("builtins.print", lambda *a, **k: (calls.append(a), real_print(*a, **k)))
-    absorb(result(lines=["  -> line one", "  -> line two"]), store, report)
-    assert store.results == [(101, True)]
+    absorb(result(lines=["  -> line one", "  -> line two"]), report)
     assert report.sites == [(101, 6, 5, 3, 2)]
     assert report.problems == []
     assert len(calls) == 1  # the whole block is one write, not one print per line
     assert capsys.readouterr().out == "  -> line one\n  -> line two\n"
 
 
-def test_links_found_but_nothing_parsed_records_failure_and_reports_the_problem():
-    store, report = FakeStore(), FakeReport()
-    absorb(result(found=8, parsed=0, stored=0, dupes=0), store, report)
-    assert store.results == [(101, False)]
+def test_links_found_but_nothing_parsed_reports_the_problem():
+    report = FakeReport()
+    absorb(result(found=8, parsed=0, stored=0, dupes=0), report)
     assert report.sites == [(101, 8, 0, 0, 0)]
     assert report.problems == [(101, "found=8 parsed=0")]
 
 
 def test_per_site_problems_reach_the_report():
-    store, report = FakeStore(), FakeReport()
-    absorb(result(problems=["1406 (22001): Data too long"]), store, report)
+    report = FakeReport()
+    absorb(result(problems=["1406 (22001): Data too long"]), report)
     assert report.problems == [(101, "1406 (22001): Data too long")]
 
 
@@ -155,13 +139,13 @@ def test_drain_absorbs_every_result_and_returns_without_hanging():
     for t in threads:
         t.start()
 
-    store, report = FakeStore(), FakeReport()
-    drainer = threading.Thread(target=drain, args=(threads, results, store, report), daemon=True)
+    report = FakeReport()
+    drainer = threading.Thread(target=drain, args=(threads, results, report), daemon=True)
     drainer.start()
     drainer.join(timeout=5)
 
     assert not drainer.is_alive()  # a hang would leave the drainer thread still running
-    assert sorted(store.results) == [(1, True), (2, True)]
+    assert sorted(s[0] for s in report.sites) == [1, 2]
 
 
 class ListingBrowser:
@@ -254,14 +238,14 @@ def test_drain_gives_up_on_a_worker_that_never_finishes():
     for t in threads:
         t.start()
 
-    store, report = FakeStore(), FakeReport()
+    report = FakeReport()
     began = time.time()
-    drain(threads, results, store, report, None, stall_limit=1)
+    drain(threads, results, report, None, stall_limit=1)
     elapsed = time.time() - began
     stop_it.set()
 
     assert elapsed < 10  # returned on the stall limit, not when the worker ended
-    assert store.results == []
+    assert report.sites == []
 
 
 def test_drain_still_waits_while_results_keep_arriving():
@@ -277,9 +261,9 @@ def test_drain_still_waits_while_results_keep_arriving():
     for t in threads:
         t.start()
 
-    store, report = FakeStore(), FakeReport()
-    drain(threads, results, store, report, None, stall_limit=2)
-    assert sorted(store.results) == [(1, True), (2, True), (3, True)]
+    report = FakeReport()
+    drain(threads, results, report, None, stall_limit=2)
+    assert sorted(s[0] for s in report.sites) == [1, 2, 3]
 
 
 class FakeCursor:
@@ -404,22 +388,15 @@ def test_a_site_that_reads_its_fields_from_the_article_page_is_still_fetched():
     assert "https://site.test/a" in [c[0] for c in browser.calls]
 
 
-def test_a_site_whose_articles_were_all_duplicates_is_not_recorded_as_failed():
-    store, report = FakeStore(), FakeReport()
-    absorb(result(found=6, parsed=0, stored=0, dupes=6), store, report)
-    assert store.results == [(101, True)]
+def test_a_site_whose_articles_were_all_duplicates_is_not_reported_as_a_problem():
+    report = FakeReport()
+    absorb(result(found=6, parsed=0, stored=0, dupes=6), report)
     assert report.problems == []
 
 
-def test_links_found_but_nothing_parsed_or_recognised_still_records_failure():
-    store, report = FakeStore(), FakeReport()
-    absorb(result(found=6, parsed=0, stored=0, dupes=0), store, report)
-    assert store.results == [(101, False)]
-
-
 def test_dropped_articles_reach_the_report():
-    store, report = FakeStore(), FakeReport()
-    absorb(result(drops={"future": 1, "short": 2, "skipped": 3}), store, report)
+    report = FakeReport()
+    absorb(result(drops={"future": 1, "short": 2, "skipped": 3}), report)
     assert report.drops == {"future": 1, "short": 2, "skipped": 3}
 
 
@@ -500,21 +477,36 @@ def test_any_other_url_group_or_none_is_not_scraped():
     assert not in_production("")
 
 
-def test_a_read_only_recipes_db_costs_the_streaks_not_the_run(tmp_path):
-    # production once could read recipes.db but not write it, and the first streak killed the run
+def test_a_read_only_recipes_db_still_gives_up_its_recipes(tmp_path):
+    # production once could read recipes.db but not write it, and the run crashed
     path = str(tmp_path / "recipes.db")
-    Store(path).close()
+    store = Store(path)
+    store.save_recipe(101, listing_recipe())
+    store.close()
     os.chmod(path, stat.S_IREAD)
     try:
-        store, report = Store(path), Report(date(2026, 10, 8), 2)
-        absorb(result(), store, report)
-        absorb(result(a_id=102, error="TimeoutError: slow"), store, report)
+        store = Store(path, readonly=True)
+        assert store.get_recipe(101) == listing_recipe()
         store.close()
     finally:
         os.chmod(path, stat.S_IREAD | stat.S_IWRITE)
-    assert report.ran == 1 and report.errors == 1
-    assert [why for a_id, why in report.problems if a_id == "recipes.db"] == [
-        "failure streaks not saved -- attempt to write a readonly database (SQLITE_READONLY)"]
+
+
+def test_a_scrape_run_cannot_change_recipes_db(tmp_path):
+    path = tmp_path / "recipes.db"
+    Store(str(path)).close()
+    before = path.read_bytes()
+    store = Store(str(path), readonly=True)
+    with pytest.raises(sqlite3.OperationalError):
+        store.db.execute("DELETE FROM recipe")
+    store.close()
+    assert path.read_bytes() == before
+
+
+def test_a_scrape_run_does_not_create_a_missing_recipes_db(tmp_path):
+    with pytest.raises(sqlite3.OperationalError):
+        Store(str(tmp_path / "recipes.db"), readonly=True)
+    assert not (tmp_path / "recipes.db").exists()
 
 
 def test_a_site_that_cannot_be_started_does_not_stop_its_worker(monkeypatch):
@@ -538,7 +530,7 @@ def test_a_result_that_cannot_be_recorded_does_not_stop_the_run():
     results.put(result(a_id=1, found=None))
     results.put(result(a_id=2))
     report = Report(date(2026, 10, 8), 2)
-    drain([], results, FakeStore(), report)
+    drain([], results, report)
     assert report.ran == 1
     assert [a for a, why in report.problems if why.startswith("result not recorded")] == [1]
 
@@ -562,12 +554,3 @@ def test_a_listing_found_on_the_retry_does_not_report_a_title():
     r = run_site(browser, None, 101, "https://site.test/news", listing_recipe(),
                  date(2026, 9, 1), ("ABC", "lede", "u"), (), (), ())
     assert not any("page title" in line for line in r.lines)
-
-
-def test_with_streaks_off_a_run_writes_nothing_to_recipes_db(monkeypatch):
-    monkeypatch.setattr(config, "FAILURE_STREAKS", False)
-    store, report = FakeStore(), Report(date(2026, 10, 9), 2)
-    absorb(result(), store, report)
-    absorb(result(a_id=102, error="TimeoutError: slow"), store, report)
-    assert store.results == []
-    assert report.ran == 1 and report.errors == 1
