@@ -235,7 +235,6 @@
 2898,https://news.fsu.edu/category/news/
 2900,https://www.ucf.edu/news/
 2901,https://news.ufl.edu/
-2909,https://www.ornl.gov/all-news?f[0]=all_news_news_type%3ANewsReleases
 2910,https://newsreleases.sandia.gov/
 3048,https://arkansasag.gov/news-alerts/news-releases/
 3052,https://oag.ca.gov/media/news
@@ -983,7 +982,6 @@
 17588,https://www.sfu.ca/sfunews.html
 17593,https://www.ulethbridge.ca/unews/headlines
 17595,https://news.usask.ca/media-releases.php
-17599,https://news.uwinnipeg.ca/news-archives/
 17608,https://news.ontariotechu.ca/
 17613,https://media.utoronto.ca/
 17615,https://uwaterloo.ca/news/
@@ -1057,10 +1055,8 @@
 18538,https://www.grantthornton.com/newsroom
 18545,https://www.jnj.com/media-center
 18557,https://www.tcs.com/who-we-are/newsroom
-18560,https://press.wbd.com/us/search?search_api_fulltext=&type=media_release
 18574,https://www.airbus.com/en/newsroom/press-releases
 18578,https://www.avinc.com/news/?_type=press-release
-18581,https://www.agilent.com/about/newsroom/presrel/
 18594,https://www.kbr.com/en/insights-news
 18598,https://www.mitre.org/news-insights?search_api_fulltext=&field_type%5B321%5D=321&sort_by=field_publish_date#views-exposed-form-news-and-insights-block-1
 18607,https://news.ppg.com/press-releases/default.aspx
@@ -1474,7 +1470,7 @@
 27638,https://correa.house.gov/news/press-releases
 27641,https://biggs.house.gov/media/press-releases
 27642,https://khanna.house.gov/media/press-releases
-27643,https://mast.house.gov/press-releases
+27643,https://mast.house.gov/category/press-releases/
 27644,https://arrington.house.gov/news/documentquery.aspx?DocumentTypeID=27
 27646,https://tenney.house.gov/media/press-releases
 27649,https://gonzalez.house.gov/media/press-releases
@@ -1542,7 +1538,7 @@
 23997,https://housing-infrastructure.canada.ca/media/index-nr-cp-eng.html
 23998,https://www.canada.ca/en/news/advanced-news-search/news-results.html?_=1720610737279&dprtmnt=fisheriesoceans&start=&end=
 24011,https://www.esri.ie/news/christmas-opening-hours-1
-24043,https://norcross.house.gov/press-releases
+24043,https://norcross.house.gov/media/press-releases
 24093,https://adams.house.gov/media-center/press-releases
 24124,https://democraticwhip.house.gov/newsroom/press-releases
 24165,https://aguilar.house.gov/category/congress_press_release/
@@ -1688,7 +1684,7 @@
 26674,https://www.ksbe.edu/news
 26784,https://oilchange.org/press/
 27052,https://www.nice.com/press-releases
-27053,https://davidson.house.gov/press-releases
+27053,https://davidson.house.gov/media/press-releases
 27616,https://raskin.house.gov/press-releases
 28325,https://www.news.conduent.com/news
 28329,https://www.bridgevalley.edu/news/index.html
