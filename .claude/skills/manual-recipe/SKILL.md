@@ -261,7 +261,7 @@ from dataclasses import asdict
 from build_recipes import (MIN_PASSES, is_banner, learn_boilerplate, show_sample,
                            verify_elsewhere)
 from scraper import config
-from scraper.lede import load_ledes
+from scraper import articles
 from scraper.parse import extract, find_items
 from scraper.recipe import Recipe
 from scraper.strip import load_strips, patterns_for
@@ -293,7 +293,9 @@ recipe.boilerplate = learn_boilerplate([item["body"]] + bodies)
 for line in recipe.boilerplate:
     print("  boilerplate: %s" % line[:80])
 item = extract(fetch(link), recipe, drop, link, rows[link], drop_title)
-show_sample(item, load_ledes(config.LEDES_CSV).get(A_ID), link)
+conn = articles.connect()
+show_sample(item, articles.load_agencies(conn, [A_ID]).get(A_ID, ("", None))[1], link)
+conn.close()
 json.dump(asdict(recipe), open(os.path.join(WORK, "recipe.json"), "w", encoding="utf-8"), indent=1)
 print("PASS")
 ```

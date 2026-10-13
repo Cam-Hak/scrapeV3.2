@@ -163,7 +163,6 @@
 208,https://www.exim.gov/news
 212,https://www.fdic.gov/news/press-releases
 213,https://www.fec.gov/updates/?update_type=press-release
-216,https://www.fmc.gov/articles/
 218,https://www.federalreserve.gov/newsevents/pressreleases.htm
 220,https://www.gsa.gov/about-us/newsroom/news-releases
 228,https://ncua.gov/news/press-releases
@@ -259,7 +258,6 @@
 3908,https://agrilifetoday.tamu.edu/category/all-news/
 4101,https://www.cuny.edu/about/administration/offices/communications-marketing/news/
 4553,https://www.chickasaw.net/News/Press-Releases.aspx
-4811,http://kirkwoodonlinenews.org/latest-news/
 4814,https://www2.witcc.edu/about/news/
 4815,https://www.news.iastate.edu/news-releases
 4818,https://clas.uiowa.edu/news
@@ -319,7 +317,7 @@
 7295,https://farmland.org/news?tab=press-releases#press-releases
 7297,https://www.citizen.org/news/type/press/
 7298,https://www.afscme.org/press/releases
-7299,https://familiesusa.org/press-releases/
+7299,https://www.familiesusa.org/press-releases/
 7305,https://www.newsmediaalliance.org/about-us/media-center-2/
 7307,https://newsroom.heart.org/search?ct=releases
 7310,https://www.peoplefor.org/media-center
@@ -360,7 +358,7 @@
 7874,https://www.sdsu.edu/news/list?tag=Campus%20News
 7876,https://news.sfsu.edu/
 7881,https://www.csustan.edu/news
-7883,https://www.minesnewsroom.com/newsroom
+7883,https://www.mines.edu/news/all-news/
 7884,https://newsmediarelations.colostate.edu/press-releases/
 7887,https://news.cornell.edu/archive
 7890,https://www.mountsinai.org/about/newsroom/news
@@ -389,7 +387,6 @@
 7960,https://medicine.washu.edu/news/type/news-release/
 7961,https://geiselmed.dartmouth.edu/news/
 7968,https://atlanticcape.edu/news/all-news.php
-7972,https://news.tcnj.edu/
 7973,http://www.ccm.edu/news-archive/
 7976,https://www.rcsj.edu/about/news/
 7978,https://www.kean.edu/news/archive
