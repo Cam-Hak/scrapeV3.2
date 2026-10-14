@@ -48,8 +48,8 @@ LLM_MODEL = os.environ.get("SCRAPER_LLM_MODEL", "claude-haiku-4-5-20251001")
 LLM_WORKSPACE_ID = os.environ.get("SCRAPER_LLM_WORKSPACE_ID")
 
 # bumped on every push: the last number goes up by one, the date is the day of the push
-VERSION = "3.2.5"
-VERSION_DATE = "10/13/2026"
+VERSION = "3.2.6"
+VERSION_DATE = "10/14/2026"
 VERSION_LINE = "Load Version %s %s" % (VERSION, VERSION_DATE)
 
 SQLITE_PATH = "recipes.db"
@@ -71,6 +71,9 @@ SHORT_DOC = 150
 # run history, written next to recipes.db -- see scraper/history.py
 RUNS_LOG = "runs.jsonl"
 RUN_SITES_LOG = "run_sites.jsonl"
+# one "id,code" file per run for the scraper monitor, the newest STATUS_KEEP kept
+STATUS_DIR = "status"
+STATUS_KEEP = 60
 
 # give up when no worker has finished a site in this long -- a page load has
 # no timeout of its own, so one unresponsive site can otherwise hang the run

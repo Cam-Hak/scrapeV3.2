@@ -22,3 +22,4 @@ downloaded_files/
 *.log
 runs.jsonl
 run_sites.jsonl
+status/

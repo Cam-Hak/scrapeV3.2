@@ -189,6 +189,31 @@ Keep the `>> scrape.log 2>&1`. Cron throws a job's output away otherwise, and a 
 that failed to send says why only in that output — look for
 `could not email the summary`.
 
+### The status log
+
+Every run also writes `status/<run_id>.csv` in the scraper folder, for example
+`status/20261014T040000.csv`. It is one line per site, `id,code`, with no header:
+
+```
+7883,O
+24315,T
+```
+
+| Code | Meaning |
+|---|---|
+| `O` | worked, stored new docs |
+| `D` | worked, everything was already loaded |
+| `Q` | worked, nothing new in the date window |
+| `N` | listing came back empty |
+| `P` | links found, but no article could be read |
+| `E` | crashed |
+| `T` | timed out and was killed |
+| `S` | skipped: no recipe, lede or uname |
+| `I` | not run, because the run was stopped |
+
+The newest 60 files are kept and older ones deleted. A site left out of a run, such as
+one outside an `M-` group, has no line in that run's file.
+
 Repeating a day is harmless: the `filename` column is unique, so an article already
 loaded is counted as a duplicate rather than stored again, and a site whose articles
 were all duplicates is not treated as broken.

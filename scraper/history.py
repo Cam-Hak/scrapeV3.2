@@ -7,7 +7,21 @@ from datetime import datetime
 OK = "ok"
 STALE = "stale"        # links found but nothing parsed -- selectors have gone off
 ERROR = "error"
-SKIPPED = "skipped"    # never attempted: no recipe, or benched
+SKIPPED = "skipped"    # never attempted: no recipe, lede or uname, or the run was stopped
+
+
+def code(state, found, parsed, stored, dupes, error):
+    if state == SKIPPED:
+        return "I" if error.startswith("not run") else "S"
+    if state == ERROR:
+        return "T" if error.startswith("timed out") else "E"
+    if not found:
+        return "N"
+    if not parsed and not dupes:
+        return "P"
+    if stored:
+        return "O"
+    return "D" if dupes else "Q"
 
 
 class History:
@@ -20,19 +34,31 @@ class History:
     wrapped. Losing a log line costs less than losing the run that made it.
     """
 
-    def __init__(self, directory=".", runs="runs.jsonl", sites="run_sites.jsonl"):
+    def __init__(self, directory=".", runs="runs.jsonl", sites="run_sites.jsonl",
+                 status="status", keep=60):
         self.runs_path = os.path.join(directory, runs)
         self.sites_path = os.path.join(directory, sites)
         self.run_id = datetime.now().strftime("%Y%m%dT%H%M%S")
+        # one tiny "id,code" file per run, for the monitor to read without parsing json
+        self.status_dir = os.path.join(directory, status)
+        self.status_path = os.path.join(self.status_dir, self.run_id + ".csv")
+        self.keep = keep
         self.started = time.time()
         self.write_errors = 0
+        try:
+            os.mkdir(self.status_dir)
+        except OSError:
+            pass
 
-    def _append(self, path, record):
+    def _write(self, path, line):
         try:
             with open(path, "a", encoding="utf-8") as f:
-                f.write(json.dumps(record, separators=(",", ":")) + "\n")
+                f.write(line + "\n")
         except Exception:
             self.write_errors += 1
+
+    def _append(self, path, record):
+        self._write(path, json.dumps(record, separators=(",", ":")))
 
     def site(self, a_id, state, found=0, parsed=0, stored=0, dupes=0, error="", problems=(),
              drops=None, routed=None):
@@ -49,8 +75,15 @@ class History:
             "error": error or "",
             "problems": list(problems or ()),
         })
+        self._write(self.status_path,
+                    "%s,%s" % (a_id, code(state, found, parsed, stored, dupes, error or "")))
 
     def finish(self, report, days=None, workers=None):
+        try:
+            for old in sorted(os.listdir(self.status_dir))[:-self.keep]:
+                os.remove(os.path.join(self.status_dir, old))
+        except OSError:
+            pass
         now = time.time()
         self._append(self.runs_path, {
             "run_id": self.run_id,

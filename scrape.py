@@ -330,7 +330,8 @@ def main():
 
     # only build_recipes.py writes recipes.db
     store = Store(config.SQLITE_PATH, readonly=True)
-    history = History(runs=config.RUNS_LOG, sites=config.RUN_SITES_LOG)
+    history = History(runs=config.RUNS_LOG, sites=config.RUN_SITES_LOG,
+                      status=config.STATUS_DIR, keep=config.STATUS_KEEP)
     conn = articles.connect()
     agencies = articles.load_agencies(conn, [a_id for a_id, _ in sites])
     conn.close()
