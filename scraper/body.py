@@ -10,7 +10,9 @@ CONTACT = re.compile(
     r"|.{0,40}(media|press) contacts?:?$)", re.I)
 FOOTNOTE = re.compile(r"^\[\d+\]")
 HEADING = re.compile(r"^(footnotes?|notes|references?|endnotes?|citations?|sources?)$", re.I)
-NOISE = re.compile(r"\s*\(Opens in a new window\)", re.I)
+# cut, not a line drop: share-button text can run straight into a real sentence
+NOISE = re.compile(r"\s*\(Opens in a new window\)"
+                   r"|Facebook\s*Twitter\s*LinkedIn\s*Email\s*Print\s*Share", re.I)
 DATA_BLOB = re.compile(r'^\[?\s*\{\s*"')
 MD_HEADING = re.compile(r"^#{1,6}\s+")
 MD_QUOTE = re.compile(r"^>+\s*")

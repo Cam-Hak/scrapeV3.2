@@ -128,3 +128,21 @@ def test_three_hashes_still_read_as_a_wire_end_marker():
     text = "The release body.\n\n###\n\nFollow us on social media."
     body, _ = clean(text, "A release", WHEN)
     assert body == "The release body."
+
+
+def test_a_share_button_line_is_dropped():
+    text = "The agency issued a statement.\n\nFacebookTwitterLinkedInEmailPrintShare\n\nIt takes effect today."
+    body, _ = clean(text, "A statement", WHEN)
+    assert body == "The agency issued a statement.\n\nIt takes effect today."
+
+
+def test_share_buttons_glued_to_a_sentence_are_cut_and_the_sentence_kept():
+    text = "FacebookTwitterLinkedInEmailPrintShareThe agency issued a statement on Tuesday."
+    body, _ = clean(text, "A statement", WHEN)
+    assert body == "The agency issued a statement on Tuesday."
+
+
+def test_spaced_out_share_buttons_are_cut_too():
+    text = "The agency issued a statement.\n\nFacebook Twitter LinkedIn Email Print Share"
+    body, _ = clean(text, "A statement", WHEN)
+    assert body == "The agency issued a statement."
