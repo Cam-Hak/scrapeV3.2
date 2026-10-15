@@ -1,3 +1,5 @@
+import re
+
 import mysql.connector
 from unidecode import unidecode
 
@@ -9,6 +11,9 @@ STRIP = ("\u200b", "\u200c", "\u200d", "\ufeff")
 # trailing headline characters in the filename -- every site in the queue uses this default
 FILENAME_CHARS = 10
 COMMENT_LIMIT = 255
+# a browser starts a tag only at "<" followed by a letter, "/", "!" or "?"
+TAG = re.compile(r"<[A-Za-z/!?][^<>]*>")
+TAG_START = re.compile(r"<(?=[A-Za-z/!?])")
 INSERT = (
     "INSERT INTO press_release "
     "(a_id, headline, content_date, body_txt, contact_info, filename, status, headline2, uname) "
@@ -56,7 +61,9 @@ def filename(prefix, date, headline):
 def clean(text):
     for ch in STRIP:
         text = text.replace(ch, "")
-    return unidecode(text)
+    # the coder's pages print stored text unescaped, so nothing may read as a tag; not
+    # &lt;-escaped, as the email and the exports would show that literally
+    return TAG_START.sub("< ", TAG.sub("", unidecode(text)))
 
 
 def save_article(conn, a_id, prefix, headline, date, body, contact=None,

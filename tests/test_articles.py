@@ -1,3 +1,4 @@
+import re
 from datetime import date
 
 from scraper.articles import clean, existing, filename, save_article
@@ -114,3 +115,28 @@ def test_the_uname_reaches_the_insert():
     conn = FakeConn()
     save_article(conn, 1, "P", "A headline", WHEN, "A body", uname="jsmith")
     assert conn.cur.args[8] == "jsmith"
+
+
+MARKUP = "End </td> <table>x</table> <b>bold</b> line<br/>next <5% a < b x<y"
+
+
+def test_stored_text_cannot_break_the_coders_html():
+    conn = FakeConn()
+    save_article(conn, 1, "P", MARKUP, WHEN, MARKUP, contact=MARKUP, comment=MARKUP)
+    headline, body, contact, comment = (conn.cur.args[1], conn.cur.args[3],
+                                        conn.cur.args[4].decode("latin1"), conn.cur.args[7])
+    for text in (headline, body, contact, comment):
+        assert not re.search(r"<[A-Za-z/!?]", text)
+        assert "<5%" in text and "a < b" in text
+    assert body == "End  x bold linenext <5% a < b x< y"
+
+
+def test_a_less_than_followed_by_a_space_or_digit_is_left_alone():
+    assert clean("if x < 5 and y > 3, <10% did") == "if x < 5 and y > 3, <10% did"
+
+
+def test_the_predicted_filename_still_matches_once_a_tag_is_cut():
+    conn = FakeConn()
+    headline = "Barr Applauds <em>EPA</em> Action"
+    save_article(conn, 21459, "HR-Barr-HKY", headline, WHEN, "A body")
+    assert conn.cur.args[5] == predicted("HR-Barr-HKY", headline, WHEN)
