@@ -1,7 +1,8 @@
-# field,phrase,action,comment,marker,whole,veto -- one line per keyword
+# field,phrase,action,comment,marker,whole,veto,pdf -- one line per keyword
 # field: body or headline. action: skip, E, W, or blank for comment only
 # comment: blank uses the standard wording for that field, otherwise this exact text
 # whole: y when the phrase must stand as its own word. veto: cancels it, split on ~
+# pdf: y to write the article's first PDF as a REPORT: line and drop this rule instead
 body,PRNewswire,skip,,,,
 body,Desarrollo Economico,skip,,,,
 body,Asociacion Americana,skip,,,,
@@ -27,7 +28,7 @@ body,honor roll,skip,,,,U.S. News
 body,dean's list,skip,,,,
 body,All rights reserved,E,,,,
 body,letter,E,Shows letter,TNSmlt,y,
-body,report,E,Shows report,TNSmrp,y,journal~journals
+body,report,E,Shows report,TNSmrp,y,journal~journals,y
 body,albanese,E,CC: Albanese,,,
 body,sex,W,Check for proper use of sex in the body text,,,
 body,associated press,W,Check for associated press,,,

@@ -5,7 +5,7 @@ BODY, HEADLINE = "body", "headline"
 FIELDS = (BODY, HEADLINE)
 SKIP = "skip"
 SEPARATOR = "~"
-COLUMNS = ("field", "phrase", "action", "comment", "marker", "whole", "veto")
+COLUMNS = ("field", "phrase", "action", "comment", "marker", "whole", "veto", "pdf")
 DEFAULTS = {BODY: "CC `%s` found", HEADLINE: "CC `%s` found in headline"}
 
 RULES = []
@@ -34,6 +34,7 @@ def _rule(row):
     cell["pattern"] = _word(cell["phrase"]) if cell["whole"].lower() == "y" else None
     cell["veto"] = [_word(v) for v in cell["veto"].split(SEPARATOR) if v.strip()]
     cell["comment"] = cell["comment"] or DEFAULTS[cell["field"]] % cell["phrase"]
+    cell["pdf"] = cell["pdf"].lower() == "y"
     return cell
 
 

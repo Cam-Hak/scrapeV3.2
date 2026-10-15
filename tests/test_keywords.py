@@ -19,6 +19,11 @@ def test_a_row_loads_with_its_field_and_action(tmp_path):
     assert rule["marker"] == "TNSmrp"
 
 
+def test_the_pdf_column_reads_y_as_on_and_blank_as_off(tmp_path):
+    assert only(tmp_path, "body,report,E,,TNSmrp,y,,y\n")["pdf"] is True
+    assert only(tmp_path, "body,report,E,,TNSmrp,y,\n")["pdf"] is False
+
+
 def test_a_blank_comment_uses_the_standard_wording(tmp_path):
     assert only(tmp_path, "body,report,E,,,,\n")["comment"] == "CC `report` found"
 

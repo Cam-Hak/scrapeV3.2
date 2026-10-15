@@ -365,6 +365,38 @@ def test_an_article_carrying_a_skip_keyword_is_never_stored():
     assert result.drops["skipped"] == 1
 
 
+REPORT_TEXT = "The agency released its annual report today. " + WORDS
+
+
+def report_rules(monkeypatch, tmp_path):
+    path = tmp_path / "keywords.csv"
+    path.write_text("body,report,E,Shows report,TNSmrp,y,journal~journals,y\n", encoding="utf-8")
+    monkeypatch.setattr(keywords, "RULES", [])  # restored after the test, so nothing leaks
+    keywords.load(str(path))
+
+
+def test_a_report_whose_pdf_is_found_carries_it_instead_of_the_report_routing(monkeypatch, tmp_path):
+    report_rules(monkeypatch, tmp_path)
+    conn = FakeConn()
+    body = REPORT_TEXT + ' Read <a href="/files/annual-report.pdf">the full report</a>.'
+    run(ListingBrowser([LISTING, article("2026-09-05", body)]), conn)
+    stored = conn.cur.inserts[0]
+    assert ("REPORT: https://site.test/files/annual-report.pdf\n\n***\n\n"
+            "Original text here: https://site.test/a") in stored[3]
+    assert "TNSmrp" not in stored[3]
+    assert (stored[6], stored[7]) == ("D", "")
+
+
+def test_a_report_with_no_pdf_in_the_article_keeps_the_report_routing(monkeypatch, tmp_path):
+    report_rules(monkeypatch, tmp_path)
+    conn = FakeConn()
+    run(ListingBrowser([LISTING, article("2026-09-05", REPORT_TEXT)]), conn)
+    stored = conn.cur.inserts[0]
+    assert "REPORT:" not in stored[3]
+    assert stored[3].endswith("(TNSmrp)")
+    assert (stored[6], stored[7]) == ("E", "Shows report")
+
+
 def test_an_article_the_database_already_has_is_not_fetched():
     conn = FakeConn(known=["$H ABC260905One"])
     browser = ListingBrowser([ROW_LISTING, article("2026-09-05")])

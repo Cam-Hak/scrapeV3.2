@@ -1,5 +1,5 @@
 from datetime import date as date_type, datetime, timedelta
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlparse
 
 import re
 
@@ -33,6 +33,8 @@ URL_DATE = re.compile(r"/(20\d{2})/(\d{1,2})/(\d{1,2})(?:/|-|_|$)")
 MD_ESCAPE = re.compile(r"\\([^\w\s])")
 # trafilatura reads none of these, so a link to one is a fetch that cannot produce a body
 DOCUMENT = (".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".zip")
+# a country domain like kcl.ac.uk names its site with three labels, not two
+SECOND_LEVEL = ("ac", "co", "com", "edu", "gov", "net", "org")
 WIDGET_ROOTS = ("CybotCookiebotDialog", "onetrust-consent-sdk", "usercentrics-root",
                 "truste-consent-track", "qc-cmp2-container", "touchpoints-form-", "fba-",
                 "cookiescript_injected")
@@ -155,10 +157,34 @@ def _norm(s):
     return re.sub(r"[^a-z0-9]+", "", (s or "").lower())
 
 
+def first_pdf(html, url, prune=()):
+    # only the article's own text counts, so a PDF in the menu or footer is never picked;
+    # one on another site is a source it cites, not the agency's own report
+    inner = _main_html(html, prune, links=True)
+    for tag in BeautifulSoup(inner or "", "html.parser").find_all("a", href=True):
+        link = urljoin(url, tag["href"]).split("#")[0]
+        if (link.startswith(("http://", "https://")) and _site(link) == _site(url)
+                and link.split("?")[0].lower().endswith(".pdf")):
+            return link
+    return None
+
+
+def _site(url):
+    # the registered domain, so documents1.worldbank.org and www.worldbank.org are one site
+    parts = (urlparse(url).hostname or "").split(".")
+    country = len(parts) > 2 and len(parts[-1]) == 2 and parts[-2] in SECOND_LEVEL
+    return ".".join(parts[-3:] if country else parts[-2:])
+
+
+def _main_html(html, prune=(), links=False):
+    # trafilatura picks the article out of the page
+    return trafilatura.extract(html, output_format="html", include_links=links,
+                               prune_xpath=WIDGET_PRUNE + [CLASS_PRUNE % c for c in prune])
+
+
 def _article_text(html, prune=()):
-    # trafilatura picks the article out; html2text keeps its paragraph structure
-    inner = trafilatura.extract(html, output_format="html",
-                                prune_xpath=WIDGET_PRUNE + [CLASS_PRUNE % c for c in prune])
+    # html2text keeps the article's paragraph structure
+    inner = _main_html(html, prune)
     if not inner:
         return None
     reader = html2text.HTML2Text()

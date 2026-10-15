@@ -146,3 +146,28 @@ def test_an_article_with_no_skip_keyword_is_kept(tmp_path):
 
 def test_a_routing_keyword_is_not_treated_as_a_skip(tmp_path):
     assert route.skipped("A title", "see the report. " + LONG, rules(tmp_path, BODY_E)) is None
+
+
+REPORT_PDF = "body,report,E,Shows report,TNSmrp,y,journal~journals,y\n"
+
+
+def test_a_pdf_rule_is_found_when_its_keyword_matches(tmp_path):
+    found = route.pdf_rules("A title", "see the report. " + LONG, rules(tmp_path, REPORT_PDF))
+    assert [r["phrase"] for r in found] == ["report"]
+
+
+def test_a_veto_word_keeps_the_pdf_rule_from_firing(tmp_path):
+    assert route.pdf_rules("A title", "the journal report. " + LONG,
+                           rules(tmp_path, REPORT_PDF)) == []
+
+
+def test_a_rule_without_the_pdf_flag_is_never_a_pdf_rule(tmp_path):
+    assert route.pdf_rules("A title", "see the report. " + LONG, rules(tmp_path, BODY_E)) == []
+
+
+def test_an_ignored_rule_leaves_no_status_comment_or_marker(tmp_path):
+    loaded = rules(tmp_path, REPORT_PDF + BODY_W)
+    body = "see the report, pictured. " + LONG
+    status, comment, markers = route.decide("A title", body, 300, loaded,
+                                            ignore=route.pdf_rules("A title", body, loaded))
+    assert (status, comment, markers) == ("W", "Check for pictured", [])

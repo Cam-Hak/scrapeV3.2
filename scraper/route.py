@@ -13,11 +13,12 @@ def short(words):
     return MIN_WORDS <= words <= SHORT_DOC
 
 
-def decide(headline, body, words, rules=None):
+def decide(headline, body, words, rules=None, ignore=()):
     text = {keywords.BODY: body, keywords.HEADLINE: headline}
     status, comments, markers = DEFAULT_STATUS, [], []
     for field, action in CHECKS:
-        hits = _matching(field, action, text[field], rules)
+        hits = [rule for rule in _matching(field, action, text[field], rules)
+                if rule not in ignore]
         if not hits:
             continue
         comments += [rule["comment"] for rule in hits]
@@ -30,6 +31,13 @@ def decide(headline, body, words, rules=None):
         comments.append(SHORT_NOTE)
     # two rules can carry one code, and the desk should not read it twice
     return status, " ".join(c for c in comments if c), list(dict.fromkeys(markers))
+
+
+def pdf_rules(headline, body, rules=None):
+    # rules a linked PDF settles: with the PDF attached, nobody has to go and look
+    text = {keywords.BODY: body, keywords.HEADLINE: headline}
+    return [rule for rule in (keywords.RULES if rules is None else rules)
+            if rule["pdf"] and keywords.matches(rule, text[rule["field"]])]
 
 
 def skipped(headline, body, rules=None):

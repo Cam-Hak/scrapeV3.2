@@ -2,8 +2,8 @@ from datetime import date, datetime, timedelta
 
 from bs4 import BeautifulSoup
 
-from scraper.parse import (_article_text, _date, _dateline, _parse_date, _relative,
-                           find_items, find_links)
+from scraper.parse import (_article_text, _date, _dateline, _parse_date, _relative, _site,
+                           find_items, find_links, first_pdf)
 from scraper.recipe import Recipe
 
 NOW = datetime(2026, 9, 4, 12, 0)
@@ -228,3 +228,47 @@ def test_a_consent_widget_is_dropped_before_the_body_is_read():
     assert "digital twin" in text
     assert "Cookie report" not in text
     assert "doubleclick" not in text
+
+
+TEXT = " ".join(["The agency released its annual report on water quality today."] * 10)
+REPORT_PAGE = """<html><body>
+<nav><a href="/nav/menu.pdf">Menu</a> <a href="/about">About</a></nav>
+<main><article><h1>Annual report released</h1><p>%s</p>
+<p>Read the full report: %s.</p><p>%s</p></article></main>
+<footer><a href="/footer/privacy.pdf">Privacy</a></footer></body></html>"""
+NEWS = "https://example.gov/news/annual-report"
+
+
+def test_the_first_pdf_in_the_article_text_comes_back_absolute():
+    page = REPORT_PAGE % (TEXT, '<a href="/files/Annual-Report.PDF#page=2">report</a>', TEXT)
+    assert first_pdf(page, NEWS) == "https://example.gov/files/Annual-Report.PDF"
+
+
+def test_a_pdf_only_in_the_menu_or_footer_is_not_the_report():
+    assert first_pdf(REPORT_PAGE % (TEXT, "see the agency site", TEXT), NEWS) is None
+
+
+def test_a_word_document_is_not_taken_for_the_pdf():
+    page = REPORT_PAGE % (TEXT, '<a href="/files/annual-report.docx">report</a>', TEXT)
+    assert first_pdf(page, NEWS) is None
+
+
+def test_a_page_with_no_links_has_no_pdf():
+    assert first_pdf("<html><body><p>%s</p></body></html>" % TEXT, NEWS) is None
+
+
+def test_a_pdf_on_another_site_is_a_cited_source_not_the_report():
+    page = REPORT_PAGE % (TEXT, '<a href="https://supremecourt.uk/summary.pdf">ruling</a>', TEXT)
+    assert first_pdf(page, NEWS) is None
+
+
+def test_the_agencys_own_pdf_is_taken_after_a_cited_one():
+    links = ('<a href="https://supremecourt.uk/summary.pdf">ruling</a> and '
+             '<a href="https://docs.example.gov/annual.pdf">our report</a>')
+    assert first_pdf(REPORT_PAGE % (TEXT, links, TEXT), NEWS) == "https://docs.example.gov/annual.pdf"
+
+
+def test_a_site_is_its_registered_domain():
+    assert _site("https://documents1.worldbank.org/x.pdf") == _site("https://www.worldbank.org/news")
+    assert _site("https://www.kcl.ac.uk/news") == "kcl.ac.uk"
+    assert _site("https://www.ox.ac.uk/news") != _site("https://www.kcl.ac.uk/news")

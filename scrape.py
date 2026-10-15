@@ -15,7 +15,7 @@ from scraper.browser import Browser
 from scraper.history import ERROR, OK, SKIPPED, STALE, History
 from scraper.isolate import run_site_isolated, sweep_profiles
 from scraper.lede import document
-from scraper.parse import _norm, extract, find_items, set_dayfirst
+from scraper.parse import _norm, extract, find_items, first_pdf, set_dayfirst
 from scraper.report import Report
 from scraper.sites import by_host, load_sites
 from scraper.strip import clean_title, load_strips, patterns_for
@@ -66,11 +66,12 @@ def scrape_site(browser, conn, a_id, url, recipe, cutoff, agency, drop, drop_tit
             duplicates += 1
             lines.append("%s already have it -- not fetched" % tag)
             continue
-        item = extract(browser.get(link), recipe, drop, link, row, drop_title, prune)
+        page = browser.get(link)
+        item = extract(page, recipe, drop, link, row, drop_title, prune)
         if not item:
             # js-built articles land after the page loads, same as the listing above
-            item = extract(browser.get(link, patient=True), recipe, drop, link, row,
-                           drop_title, prune)
+            page = browser.get(link, patient=True)
+            item = extract(page, recipe, drop, link, row, drop_title, prune)
         if not item:
             lines.append("%s no headline, date or body -- skipped" % tag)
             continue
@@ -98,11 +99,15 @@ def scrape_site(browser, conn, a_id, url, recipe, cutoff, agency, drop, drop_tit
             drops["skipped"] += 1
             lines.append("%s skipped on %r" % (tag, phrase))
             continue
-        status, comment, markers = route.decide(item["headline"], item["body"], words)
+        wanted = route.pdf_rules(item["headline"], item["body"])
+        pdf = first_pdf(page, link, prune) if wanted else None
+        status, comment, markers = route.decide(item["headline"], item["body"], words,
+                                                ignore=wanted if pdf else ())
         routed[status] = routed.get(status, 0) + 1
         if route.short(words):
             routed["short_doc"] += 1
-        body = document(agency[1], item["headline"], item["body"], item["date"], link)
+        text = item["body"] + ("\n\nREPORT: %s" % pdf if pdf else "")
+        body = document(agency[1], item["headline"], text, item["date"], link)
         for mark in markers:
             body += " (%s)" % mark
         ok, reason = articles.save_article(
@@ -115,6 +120,8 @@ def scrape_site(browser, conn, a_id, url, recipe, cutoff, agency, drop, drop_tit
                                                  item["headline"][:56]))
             if comment:
                 lines.append("         %s" % comment)
+            if pdf:
+                lines.append("         report pdf attached: %s" % pdf)
         elif reason == "duplicate":
             duplicates += 1
             lines.append("%s %s already have it" % (tag, item["date"]))
