@@ -280,11 +280,11 @@ def drain(threads, results, report, history=None, stall_limit=None):
             report.problem(r.a_id, "result not recorded -- " + why)
 
 
-def notify(conf, report, run_id, lines):
+def notify(conf, report, lines):
     # both halves mail in on the same morning, so the subject has to say which one this is
-    half = "house and senate" if report.senate else "all other sites"
-    subject = "scrape %s, %s -- %d docs loaded, %d error(s)" % (
-        run_id, half, report.stored, report.errors)
+    subject = "SUMMARY: Scrape Project %sPULL %s" % (
+        "House and Senate " if report.senate else "",
+        time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(report.started)))
     try:
         mail.send(conf["sender"], conf["to"], subject, "\n".join(lines), cc_addr=conf["cc"])
         log("summary emailed to %s" % conf["to"])
@@ -446,7 +446,7 @@ def main():
     for line in lines:
         log(line)
     if mailing:
-        notify(mailing, report, history.run_id, lines)
+        notify(mailing, report, lines)
     if crashed:
         sys.exit(1)
 

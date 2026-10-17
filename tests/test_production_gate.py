@@ -77,7 +77,7 @@ def run(monkeypatch, tmp_path, argv, mailed=None, store=FakeStore):
     monkeypatch.setattr(scrape, "sweep_profiles", lambda *a, **k: 0)
     # --production reads the mail settings up front and mails the summary at the end
     monkeypatch.setattr(scrape.config, "mail", lambda: {"sender": "s@x.test", "to": "t@x.test", "cc": ""})
-    monkeypatch.setattr(scrape, "notify", lambda conf, report, run_id, lines: mailed.extend(lines))
+    monkeypatch.setattr(scrape, "notify", lambda conf, report, lines: mailed.extend(lines))
     monkeypatch.setattr(sys, "argv", ["scrape.py", "--workers", "1"] + argv)
     scrape.main()
     return queued, skipped, mailed

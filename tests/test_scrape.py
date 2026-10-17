@@ -440,24 +440,23 @@ def test_a_mail_server_that_is_down_does_not_fail_a_finished_run(monkeypatch):
         raise OSError("connection refused")
 
     monkeypatch.setattr(scrape.mail, "send", refuse)
-    notify(MAILING, Report(date(2026, 9, 1), 1), "20260915T090000", [])
+    notify(MAILING, Report(date(2026, 9, 1), 1), [])
 
 
-def test_the_subject_names_the_run_and_what_it_did(monkeypatch):
+def test_the_subject_of_a_regular_pull_names_its_start_time(monkeypatch):
     seen = []
     monkeypatch.setattr(scrape.mail, "send", lambda *args, **kw: seen.append(args))
     report = Report(date(2026, 9, 1), 1)
-    report.site(101, 5, 5, 3, 0)
-    notify(MAILING, report, "20260915T090000", ["summary", "  3 stored"])
-    subject = "scrape 20260915T090000, all other sites -- 3 docs loaded, 0 error(s)"
-    assert seen[0][2] == subject
+    report.started = time.mktime((2026, 10, 3, 12, 30, 4, 0, 0, -1))
+    notify(MAILING, report, ["summary", "  3 stored"])
+    assert seen[0][2] == "SUMMARY: Scrape Project PULL 2026-10-03 12:30:04"
     assert seen[0][3] == "summary\n  3 stored"
 
 
 def test_the_summary_goes_to_the_addresses_the_settings_name(monkeypatch):
     seen = []
     monkeypatch.setattr(scrape.mail, "send", lambda *args, **kw: seen.append((args, kw)))
-    notify(dict(MAILING, cc="editor@example.com"), Report(date(2026, 9, 1), 1), "r", [])
+    notify(dict(MAILING, cc="editor@example.com"), Report(date(2026, 9, 1), 1), [])
     assert seen[0][0][:2] == ("scraper@example.com", "desk@example.com")
     assert seen[0][1] == {"cc_addr": "editor@example.com"}
 
@@ -465,8 +464,10 @@ def test_the_summary_goes_to_the_addresses_the_settings_name(monkeypatch):
 def test_the_subject_says_which_of_the_two_daily_runs_this_was(monkeypatch):
     seen = []
     monkeypatch.setattr(scrape.mail, "send", lambda *args, **kw: seen.append(args))
-    notify(MAILING, Report(date(2026, 9, 1), 1, senate=True), "r", [])
-    assert "house and senate" in seen[0][2]
+    report = Report(date(2026, 9, 1), 1, senate=True)
+    report.started = time.mktime((2026, 10, 3, 17, 30, 5, 0, 0, -1))
+    notify(MAILING, report, [])
+    assert seen[0][2] == "SUMMARY: Scrape Project House and Senate PULL 2026-10-03 17:30:05"
 
 
 def test_the_email_body_is_the_whole_summary(monkeypatch):
@@ -474,7 +475,7 @@ def test_the_email_body_is_the_whole_summary(monkeypatch):
     monkeypatch.setattr(scrape.mail, "send", lambda *args, **kw: seen.append(args))
     report = Report(date(2026, 9, 1), 1, days=2)
     report.site(101, 20, 18, 12, 6)
-    notify(MAILING, report, "r", report.lines())
+    notify(MAILING, report, report.lines())
     body = seen[0][3]
     assert body.startswith("Load Version ")
     assert "Docs Loaded: 12" in body
