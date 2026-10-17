@@ -95,5 +95,5 @@ def test_docs_loaded_counts_what_was_stored():
     r = report()
     r.site(101, 20, 18, 12, 6)
     assert has(r, "Docs Loaded: 12")
-    assert has(r, "URLS processed: 20")
     assert has(r, "DUPS skipped: 6")
+    assert not has(r, "URLS processed")

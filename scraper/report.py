@@ -78,7 +78,6 @@ class Report:
     def _loaded(self):
         return (
             "Docs Loaded: %d" % self.stored,
-            "URLS processed: %d" % self.found,
             "Articles read: %d" % self.parsed,
             "DUPS skipped: %d" % self.dupes,
             "No Ledes found: %d" % self.ledeless,

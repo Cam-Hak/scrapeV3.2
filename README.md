@@ -92,7 +92,6 @@ Every run ends with the same block, printed to the console and sent as the body 
 ```
 Load Version 3.2.0 09/15/2026
        Docs Loaded: 667
-       URLS processed: 1869
        Articles read: 1026
        DUPS skipped: 843
        No Ledes found: 0
@@ -107,9 +106,8 @@ Passed Parameters:
        ...
 ```
 
-`URLS processed` counts every link the listings offered; `Articles read` counts the ones
-actually fetched and parsed, so the gap is what the duplicate pre-check saved. Counts
-show even at zero, so a section going quiet is visible.
+`Articles read` counts the articles actually fetched and parsed. Counts show even at
+zero, so a section going quiet is visible.
 
 `VERSION` and `VERSION_DATE` live in `scraper/config.py`. Both go up on every push —
 the last number by one, the date to the day of the push. Every run prints them as the
