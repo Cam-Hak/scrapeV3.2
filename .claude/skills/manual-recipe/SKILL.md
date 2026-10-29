@@ -276,13 +276,14 @@ found = list(rows)
 strips = load_strips(config.STRIP_CSV)
 drop = patterns_for(strips, A_ID)
 drop_title = patterns_for(strips, A_ID, "title")
+prune = patterns_for(strips, A_ID, "prune")
 link = found[0]
 
-item = extract(fetch(link), recipe, drop, link, rows[link], drop_title)
+item = extract(fetch(link), recipe, drop, link, rows[link], drop_title, prune)
 if not item:
     sys.exit("FAIL: no headline, date or body on %s" % link)
 passed, total, bodies, heads = verify_elsewhere(fetch, recipe, found, link, drop, rows,
-                                                drop_title)
+                                                drop_title, prune)
 print("matched on %d of %d other articles (need %d)" % (passed, total, min(MIN_PASSES, total)))
 if is_banner(item["headline"], heads):
     sys.exit("FAIL: headline reads %r on every article -- it is a site banner"
@@ -292,7 +293,7 @@ if passed < min(MIN_PASSES, total):
 recipe.boilerplate = learn_boilerplate([item["body"]] + bodies)
 for line in recipe.boilerplate:
     print("  boilerplate: %s" % line[:80])
-item = extract(fetch(link), recipe, drop, link, rows[link], drop_title)
+item = extract(fetch(link), recipe, drop, link, rows[link], drop_title, prune)
 conn = articles.connect()
 show_sample(item, articles.load_agencies(conn, [A_ID]).get(A_ID, ("", None))[1], link)
 conn.close()
