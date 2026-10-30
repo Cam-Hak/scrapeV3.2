@@ -2,7 +2,6 @@
 # body: drop any article line containing the text. title: cut the text out of the headline
 # prune: drop any element carrying the class before the body is read
 # separate several patterns in one column with ~
-34684,Background:,
 28015,press@eqca.org,
 29288,Faculty of Arts and HumanitiesJakobi,
 27311,,STATEMENT RELEASE: 
@@ -41,7 +40,6 @@
 13157,Printable Version,
 13365,Media Relations~Phone:~@tnc.org,
 13794,,,page-title
-14479,IPAA is a national upstream trade association~Learn more about IPAA by visiting,,entry_date
 14489,Background:,
 14542,,,text-muted
 14527,,,news
@@ -61,7 +59,6 @@
 15287,,,institutional-header-bar~skip-to-destination
 15306,,,details
 15394,FRC-NEWS,
-15440,,,sub-nav
 15455,,,feed__date
 15510,,,section__head
 15554,,,mega-sub-menu
@@ -123,7 +120,6 @@
 21992,,,share-tools~news-related
 23282,Related Links~Learn more about,
 25446,third-party tools process personal data,
-25530,We use essential cookies,
 27225,you must accept cookies,
 27273,,,press-detail__info
 23491,,,modal
@@ -203,3 +199,4 @@
 5247,,,ila-slideover~cookieb-holder
 19165,,,ea11y-widget
 19543,,,ccc-panel
+35871,,,detail_profile

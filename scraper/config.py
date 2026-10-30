@@ -48,8 +48,8 @@ LLM_MODEL = os.environ.get("SCRAPER_LLM_MODEL", "claude-haiku-4-5-20251001")
 LLM_WORKSPACE_ID = os.environ.get("SCRAPER_LLM_WORKSPACE_ID")
 
 # bumped on every push: the last number goes up by one, the date is the day of the push
-VERSION = "3.2.14"
-VERSION_DATE = "10/29/2026"
+VERSION = "3.2.15"
+VERSION_DATE = "10/30/2026"
 VERSION_LINE = "Load Version %s %s" % (VERSION, VERSION_DATE)
 
 SQLITE_PATH = "recipes.db"
