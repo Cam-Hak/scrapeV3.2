@@ -103,6 +103,14 @@ def test_a_sentence_mentioning_a_media_contact_is_not_a_heading():
     assert contact is None
 
 
+def test_for_more_than_years_is_prose_not_a_contact_heading():
+    text = ("The plant opened today.\n\nFor more than 70 years, Acme has made paint."
+            "\n\nIt employs 400 people.")
+    body, contact = clean(text, "A plant", WHEN)
+    assert "It employs 400 people." in body
+    assert contact is None
+
+
 def test_a_title_printed_twice_is_only_dropped_once_from_the_body():
     text = ("A speech to the congress\n\nA speech to the congress.\n\n"
             "It is a privilege to be here today.")

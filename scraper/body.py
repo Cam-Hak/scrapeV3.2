@@ -3,7 +3,7 @@ import re
 from dateutil import parser as dateparser
 
 CONTACT = re.compile(
-    r"^(for (further|more|media|press)\b"
+    r"^(for (further|more(?! than)|media|press)\b"
     r"|(media|press) (contact|enquiries|inquiries|queries)"
     r"|contact:"
     # a heading line of its own, as in "Belmont University Media Contact"
