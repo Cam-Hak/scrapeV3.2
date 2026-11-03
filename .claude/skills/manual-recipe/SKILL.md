@@ -302,7 +302,8 @@ print("PASS")
 ```
 
 It writes the learned `boilerplate` and `dayfirst` back into `recipe.json`, so
-what you save is what passed.
+what you save is what passed. Set `boilerplate` back to `[]` before running it
+again: the old lines are already stripped, so it relearns a wrong, shorter list.
 
 Read the sample record before you believe it. The headline must be the article's
 own, the date must be that article's date, and the body must start at the first
