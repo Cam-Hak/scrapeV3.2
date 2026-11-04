@@ -1,6 +1,8 @@
 import json
 from dataclasses import dataclass, asdict, field
 
+from .articles import FILENAME_CHARS
+
 
 @dataclass
 class Recipe:
@@ -15,6 +17,8 @@ class Recipe:
     date_on_listing: bool = False
     dayfirst: bool = False
     boilerplate: list = field(default_factory=list)
+    # raised for a site whose same-day headlines share an ending, like the old per-site setting
+    filename_chars: int = FILENAME_CHARS
 
     def to_json(self):
         return json.dumps(asdict(self))

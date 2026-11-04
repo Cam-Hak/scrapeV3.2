@@ -55,7 +55,7 @@ def scrape_site(browser, conn, a_id, url, recipe, cutoff, agency, drop, drop_tit
     problems = []
     drops = {"future": 0, "short": 0, "skipped": 0}
     routed = {"E": 0, "W": 0, "short_doc": 0}
-    names = _names(rows, agency[0], drop_title) if (
+    names = _names(rows, agency[0], drop_title, recipe.filename_chars) if (
         recipe.headline_on_listing and recipe.date_on_listing) else {}
     have = articles.existing(conn, list(names.values()))
     horizon = date.today() + timedelta(days=config.MAX_DAYS_AHEAD)
@@ -112,7 +112,7 @@ def scrape_site(browser, conn, a_id, url, recipe, cutoff, agency, drop, drop_tit
             body += " (%s)" % mark
         ok, reason = articles.save_article(
             conn, a_id, agency[0], item["headline"], item["date"], body, item["contact"],
-            status, comment, agency[2]
+            status, comment, agency[2], recipe.filename_chars
         )
         if ok:
             stored += 1
@@ -149,13 +149,13 @@ def in_production(group):
     return group.upper().startswith(config.PRODUCTION_GROUP)
 
 
-def _names(rows, prefix, drop_title):
+def _names(rows, prefix, drop_title, chars):
     # both fields come off the listing here, so the insert's filename is known before the fetch
     found = {}
     for row in rows:
         if row["headline"] and row["date"]:
             found[row["url"]] = articles.filename(
-                prefix, row["date"], articles.clean(clean_title(row["headline"], drop_title)))
+                prefix, row["date"], articles.clean(clean_title(row["headline"], drop_title)), chars)
     return found
 
 

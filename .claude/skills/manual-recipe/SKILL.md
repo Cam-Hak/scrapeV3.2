@@ -65,6 +65,7 @@ rather than let the context fill.
 | `date_on_listing` | same, for the date | `find_items` |
 | `dayfirst` | the site writes `03/09` as 3 September | `_parse_date` |
 | `boilerplate` | tail lines repeated across articles, stripped from the body | `body.clean` |
+| `filename_chars` | headline letters at the end of the TNS filename (default 10); raise it when two same-day headlines share an ending | `articles.filename` |
 
 Both readers live in `scraper/parse.py`.
 

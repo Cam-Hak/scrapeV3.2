@@ -55,3 +55,10 @@ def test_a_double_quote_never_reaches_the_filename():
     name = filename("ASSN-PMA-VPR-", date(2026, 10, 5), headline)
     assert '"' not in name
     assert name == "$H ASSN-PMA-VPR-261005Of Program"
+
+def test_a_site_can_keep_more_of_the_headline_in_its_filename():
+    # two same-day releases ending "Third Quarter of 2026" must not share a name
+    a = filename("BOC", WHEN, "Business Outlook Survey: Third Quarter of 2026", 40)
+    b = filename("BOC", WHEN, "Consumer Expectations: Third Quarter of 2026", 40)
+    assert a != b
+    assert a == "$H BOC260910ss Outlook Survey: Third Quarter of 2026"

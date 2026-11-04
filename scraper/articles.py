@@ -51,10 +51,10 @@ def existing(conn, names):
     return found
 
 
-def filename(prefix, date, headline):
+def filename(prefix, date, headline, chars=FILENAME_CHARS):
     # the unique key on press_release, so this is what stops an article loading twice;
     # a " cuts the name short in the TNS form, and saving it there lets the article load again
-    tail = headline.replace('"', "")[-FILENAME_CHARS:]
+    tail = headline.replace('"', "")[-chars:]
     return "$H %s%s%s" % (prefix, date.strftime("%y%m%d"), tail)
 
 
@@ -67,14 +67,14 @@ def clean(text):
 
 
 def save_article(conn, a_id, prefix, headline, date, body, contact=None,
-                 status="D", comment="", uname=None):
+                 status="D", comment="", uname=None, chars=FILENAME_CHARS):
     headline = clean(headline)
     body = clean(body)
     contact = clean(contact).encode("latin1") if contact else None
     # cut after unidecode, which can lengthen the text it replaces
     comment = clean(comment)[:COMMENT_LIMIT] if comment else ""
     # built from the cleaned headline: the column is latin1 and the key must survive it
-    name = filename(prefix, date, headline)
+    name = filename(prefix, date, headline, chars)
     cur = conn.cursor()
     try:
         cur.execute(INSERT, (a_id, headline[:255], date, body[:BODY_LIMIT], contact, name,

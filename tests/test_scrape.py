@@ -412,6 +412,19 @@ def test_an_article_the_database_does_not_have_is_still_fetched():
     assert "https://site.test/a" in [c[0] for c in browser.calls]
 
 
+def test_a_longer_filename_tail_tells_apart_two_releases_with_the_same_ending():
+    listing = ('<html><body><div class="row"><h2><a class="post" href="/a">Survey: Third Quarter</a>'
+               '</h2><time>2026-09-05</time></div><div class="row"><h2><a class="post" href="/b">'
+               'Outlook: Third Quarter</a></h2><time>2026-09-05</time></div></body></html>')
+    conn = FakeConn(known=["$H ABC260905Survey: Third Quarter"])
+    recipe = row_recipe()
+    recipe.filename_chars = 40
+    browser = ListingBrowser([listing, article("2026-09-05")])
+    run(browser, conn, recipe)
+    assert [c[0] for c in browser.calls] == ["https://site.test/news", "https://site.test/b"]
+    assert conn.cur.inserts[0][5] == "$H ABC260905Outlook: Third Quarter"
+
+
 def test_a_site_that_reads_its_fields_from_the_article_page_is_still_fetched():
     # without both listing flags the filename cannot be known before the fetch
     conn = FakeConn(known=["$H ABC260905One"])
