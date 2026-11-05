@@ -44,6 +44,7 @@ def scrape_site(browser, conn, a_id, url, recipe, cutoff, agency, drop, drop_tit
             lines.append("  page title %r, %d bytes" % (page_title(listing), len(listing or "")))
     # the site's date habit is re-read every run, so a stale flag cannot outlive one
     if recipe.date_on_listing and set_dayfirst(recipe, [BeautifulSoup(listing, "html.parser")]):
+        rows = find_items(listing, url, recipe)
         lines.append("  numeric dates read %s first -- recipe flag corrected" % ("day" if recipe.dayfirst else "month"))
     lines.append("  listing -> %d links" % len(rows))
     found = len(rows)

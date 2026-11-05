@@ -425,6 +425,15 @@ def test_a_longer_filename_tail_tells_apart_two_releases_with_the_same_ending():
     assert conn.cur.inserts[0][5] == "$H ABC260905Outlook: Third Quarter"
 
 
+def test_listing_dates_are_reread_once_the_site_proves_to_write_the_day_first():
+    rows = "".join('<div class="row"><h2><a class="post" href="/%s">%s</a></h2><time>%s</time></div>'
+                   % (n, n, d) for n, d in (("a", "13.10.2026"), ("b", "14.10.2026"), ("c", "05.10.2026")))
+    conn = FakeConn()
+    browser = ListingBrowser(["<html><body>%s</body></html>" % rows, article("2026-10-05")])
+    run(browser, conn, row_recipe())
+    assert conn.cur.inserts[2][2] == date(2026, 10, 5)
+
+
 def test_a_site_that_reads_its_fields_from_the_article_page_is_still_fetched():
     # without both listing flags the filename cannot be known before the fetch
     conn = FakeConn(known=["$H ABC260905One"])
