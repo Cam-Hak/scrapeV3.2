@@ -230,7 +230,13 @@ def test_a_consent_widget_is_dropped_before_the_body_is_read():
     assert "doubleclick" not in text
 
 
-TEXT = " ".join(["The agency released its annual report on water quality today."] * 10)
+def test_a_civic_cookie_control_panel_is_dropped_too():
+    page = CONSENT_PAGE.replace('<div id="cookiescript_injected_wrapper">',
+                                '<div id="ccc"><p>This site uses cookies and similar technologies.</p>')
+    assert "similar technologies" not in _article_text(page)
+
+
+TEXT =" ".join(["The agency released its annual report on water quality today."] * 10)
 REPORT_PAGE = """<html><body>
 <nav><a href="/nav/menu.pdf">Menu</a> <a href="/about">About</a></nav>
 <main><article><h1>Annual report released</h1><p>%s</p>

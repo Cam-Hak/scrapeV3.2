@@ -37,7 +37,7 @@ DOCUMENT = (".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".zip")
 SECOND_LEVEL = ("ac", "co", "com", "edu", "gov", "net", "org")
 WIDGET_ROOTS = ("CybotCookiebotDialog", "onetrust-consent-sdk", "usercentrics-root",
                 "truste-consent-track", "qc-cmp2-container", "touchpoints-form-", "fba-",
-                "cookiescript_injected")
+                "cookiescript_injected", "ccc", "cconsent")
 # a consent dialog or feedback form outweighs a short article, and trafilatura returns it instead
 WIDGET_PRUNE = ["//*[starts-with(@id, '%s')]" % root for root in WIDGET_ROOTS]
 CLASS_PRUNE = "//*[contains(concat(' ', normalize-space(@class), ' '), ' %s ')]"
