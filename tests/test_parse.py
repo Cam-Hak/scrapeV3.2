@@ -4,6 +4,7 @@ from bs4 import BeautifulSoup
 
 from scraper.parse import (_article_text, _date, _dateline, _parse_date, _relative, _site,
                            find_items, find_links, first_pdf)
+from scraper.keywords import load
 from scraper.recipe import Recipe
 
 NOW = datetime(2026, 9, 4, 12, 0)
@@ -213,6 +214,23 @@ def test_document_rows_are_never_returned_as_articles():
     assert [i["url"] for i in find_items(DOCS, "https://site.test/n", r)] == [
         "https://site.test/read/one"]
 
+REDIRECTS = """
+<div class="row"><a href="https://search.test/s/redirect?collection=news&url=https%3A%2F%2Fsite.test%2Fnews%2Fone&rank=1">One</a></div>
+<div class="row"><a href="https://search.test/s/redirect?url=https%3A%2F%2Fsite.test%2Fevents%2Ftwo">Two</a></div>
+<div class="row"><a href="/news/three?url=about">Three</a></div>
+"""
+
+
+def test_a_search_redirect_link_is_kept_as_the_article_it_points_to():
+    r = doc_recipe()
+    r.url_filter = "/news/"
+    assert find_links(REDIRECTS, "https://site.test/n", r) == [
+        "https://site.test/news/one", "https://site.test/news/three?url=about"]
+    r.item_selector = ".row"
+    assert [i["url"] for i in find_items(REDIRECTS, "https://site.test/n", r)] == [
+        "https://site.test/news/one", "https://site.test/news/three?url=about"]
+
+
 CONSENT_PAGE = """<html><body><article>
 <p>%s</p>
 <div id="cookiescript_injected_wrapper"><div id="cookiescript_injected">
@@ -278,3 +296,29 @@ def test_a_site_is_its_registered_domain():
     assert _site("https://documents1.worldbank.org/x.pdf") == _site("https://www.worldbank.org/news")
     assert _site("https://www.kcl.ac.uk/news") == "kcl.ac.uk"
     assert _site("https://www.ox.ac.uk/news") != _site("https://www.kcl.ac.uk/news")
+
+
+def report_rules(tmp_path):
+    path = tmp_path / "keywords.csv"
+    path.write_text("body,report,E,Shows report,TNSmrp,y,journal~journals,y\n", encoding="utf-8")
+    return load(str(path))
+
+
+def test_a_pdf_named_a_report_beside_its_link_is_attached(tmp_path):
+    page = REPORT_PAGE % (TEXT, 'the annual report <a href="/files/a.pdf">is here</a>', TEXT)
+    assert first_pdf(page, NEWS, (), report_rules(tmp_path)) == "https://example.gov/files/a.pdf"
+
+
+def test_a_pdf_that_is_not_called_a_report_is_left_off(tmp_path):
+    # the amicus brief case: "report" is elsewhere in the article, not at the link
+    page = REPORT_PAGE % ("The coroner's report was not released. " + TEXT,
+                          'CHD filed an <a href="/files/Amicus-Brief.pdf">amicus brief</a> on behalf of the plaintiffs',
+                          TEXT)
+    assert first_pdf(page, NEWS, (), report_rules(tmp_path)) is None
+
+
+def test_a_later_report_link_wins_over_an_earlier_unnamed_pdf(tmp_path):
+    page = ("<html><body><article><p>%s</p><p>Read <a href='/files/brief.pdf'>the brief</a> "
+            "filed last week and, separately, our new <a href='/files/report.pdf'>report</a>.</p>"
+            "<p>%s</p></article></body></html>" % (TEXT, TEXT))
+    assert first_pdf(page, NEWS, (), report_rules(tmp_path)) == "https://example.gov/files/report.pdf"

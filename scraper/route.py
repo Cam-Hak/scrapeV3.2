@@ -1,8 +1,13 @@
+import re
+
 from . import keywords
 from .config import MIN_WORDS, SHORT_DOC
 
 DEFAULT_STATUS = "D"
 SHORT_NOTE = "short doc"
+FOREIGN = "a headline not in Latin letters"
+# plain and accented Latin letters: French, Spanish or Swedish still count as Latin
+LATIN = re.compile(r"[A-Za-zÀ-ɏ]")
 # the order legacy ran these in: the last check that matches wins the status
 CHECKS = ((keywords.BODY, "E"), (keywords.BODY, "W"),
           (keywords.HEADLINE, "E"), (keywords.HEADLINE, "W"),
@@ -41,12 +46,21 @@ def pdf_rules(headline, body, rules=None):
 
 
 def skipped(headline, body, rules=None):
+    if foreign(headline):
+        return FOREIGN
     text = {keywords.BODY: body, keywords.HEADLINE: headline}
     for field in keywords.FIELDS:
         hits = _matching(field, keywords.SKIP, text[field], rules)
         if hits:
             return hits[0]["phrase"]
     return None
+
+
+def foreign(headline):
+    # a headline mostly in Greek, Chinese, Arabic or the like is a doc the desk cannot use
+    letters = [c for c in headline or "" if c.isalpha()]
+    latin = sum(1 for c in letters if LATIN.match(c))
+    return bool(letters) and latin < len(letters) / 2
 
 
 def _matching(field, action, text, rules=None):

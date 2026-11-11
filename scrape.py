@@ -101,7 +101,7 @@ def scrape_site(browser, conn, a_id, url, recipe, cutoff, agency, drop, drop_tit
             lines.append("%s skipped on %r" % (tag, phrase))
             continue
         wanted = route.pdf_rules(item["headline"], item["body"])
-        pdf = first_pdf(page, link, prune) if wanted else None
+        pdf = first_pdf(page, link, prune, wanted) if wanted else None
         status, comment, markers = route.decide(item["headline"], item["body"], words,
                                                 ignore=wanted if pdf else ())
         routed[status] = routed.get(status, 0) + 1

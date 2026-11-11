@@ -171,3 +171,16 @@ def test_an_ignored_rule_leaves_no_status_comment_or_marker(tmp_path):
     status, comment, markers = route.decide("A title", body, 300, loaded,
                                             ignore=route.pdf_rules("A title", body, loaded))
     assert (status, comment, markers) == ("W", "Check for pictured", [])
+
+
+def test_a_greek_headline_is_skipped():
+    assert route.skipped("Υποβολή αιτήσεων για φοιτητικά επιδόματα 2025/2026", LONG, []) == route.FOREIGN
+
+
+def test_a_chinese_headline_is_skipped():
+    assert route.skipped("IDC FutureScape 2027年度预测：2029年，60%的企业多数业务流程将由人工智能代理执行", LONG, []) == route.FOREIGN
+
+
+def test_an_accented_or_english_headline_is_kept():
+    assert route.skipped("RUM recibe a más de cuatro mil estudiantes", LONG, []) is None
+    assert route.skipped("Dr. Kyriakides Discusses Justice Reform on Δεύτερη Ματιά", LONG, []) is None

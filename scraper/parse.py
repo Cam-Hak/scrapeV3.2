@@ -1,14 +1,15 @@
 from datetime import date as date_type, datetime, timedelta
-from urllib.parse import urljoin, urlparse
+from urllib.parse import parse_qs, urljoin, urlparse
 
 import re
 
 import html2text
 import trafilatura
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, NavigableString
 from dateutil import parser as dateparser
 from dateutil.relativedelta import relativedelta
 
+from . import keywords
 from .body import clean as clean_body
 from .strip import clean_title
 
@@ -33,6 +34,8 @@ URL_DATE = re.compile(r"/(20\d{2})/(\d{1,2})/(\d{1,2})(?:/|-|_|$)")
 MD_ESCAPE = re.compile(r"\\([^\w\s])")
 # trafilatura reads none of these, so a link to one is a fetch that cannot produce a body
 DOCUMENT = (".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".zip")
+# the desk attaches a PDF only when the article calls it a report within this many words of the link
+NEAR_WORDS = 3
 # a country domain like kcl.ac.uk names its site with three labels, not two
 SECOND_LEVEL = ("ac", "co", "com", "edu", "gov", "net", "org")
 WIDGET_ROOTS = ("CybotCookiebotDialog", "onetrust-consent-sdk", "usercentrics-root",
@@ -50,7 +53,7 @@ def find_links(html, base_url, recipe):
         href = tag.get("href")
         if not href:
             continue
-        url = urljoin(base_url, href).split("#")[0]
+        url = _unwrap(urljoin(base_url, href).split("#")[0])
         if not url.startswith(("http://", "https://")):
             continue
         if recipe.url_filter and recipe.url_filter not in url:
@@ -77,7 +80,7 @@ def find_items(html, base_url, recipe):
         href = link.get("href") if link else None
         if not href:
             continue
-        url = urljoin(base_url, href).split("#")[0]
+        url = _unwrap(urljoin(base_url, href).split("#")[0])
         if not url.startswith(("http://", "https://")) or url in seen:
             continue
         if recipe.url_filter and recipe.url_filter not in url:
@@ -157,16 +160,30 @@ def _norm(s):
     return re.sub(r"[^a-z0-9]+", "", (s or "").lower())
 
 
-def first_pdf(html, url, prune=()):
+def first_pdf(html, url, prune=(), rules=()):
     # only the article's own text counts, so a PDF in the menu or footer is never picked;
     # one on another site is a source it cites, not the agency's own report
     inner = _main_html(html, prune, links=True)
-    for tag in BeautifulSoup(inner or "", "html.parser").find_all("a", href=True):
+    soup = BeautifulSoup(inner or "", "html.parser")
+    for tag in soup.find_all("a", href=True):
         link = urljoin(url, tag["href"]).split("#")[0]
         if (link.startswith(("http://", "https://")) and _site(link) == _site(url)
-                and link.split("?")[0].lower().endswith(".pdf")):
+                and link.split("?")[0].lower().endswith(".pdf")
+                and (not rules or any(keywords.matches(r, _near(soup, tag)) for r in rules))):
             return link
     return None
+
+
+def _near(soup, tag, words=NEAR_WORDS):
+    # the link's own words and a few either side, where the article names what the PDF is
+    start, end = NavigableString("\x02"), NavigableString("\x03")
+    tag.insert_before(start)
+    tag.insert_after(end)
+    before, rest = soup.get_text(" ").split("\x02", 1)
+    inside, after = rest.split("\x03", 1)
+    start.extract()
+    end.extract()
+    return " ".join(before.split()[-words:] + inside.split() + after.split()[:words])
 
 
 def _site(url):
@@ -199,6 +216,12 @@ def _article_text(html, prune=()):
 
 def _is_document(url):
     return url.split("?")[0].lower().endswith(DOCUMENT)
+
+
+def _unwrap(url):
+    # a search-tracking link carries the article's own address in url=, and that is the one to keep
+    target = parse_qs(urlparse(url).query).get("url", [""])[0]
+    return target if target.startswith(("http://", "https://")) else url
 
 
 def _select(soup, selector):

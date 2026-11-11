@@ -142,9 +142,14 @@ editor box and leave a note in the `headline2` column.
 | `veto` | words that cancel the match, split on `~`, always matched whole-word |
 | `pdf` | `y` to attach the article's PDF instead of routing on this phrase |
 
+An article whose headline is mostly in another script, such as Greek, Chinese or Arabic, is skipped
+the same way, with no row needed.
+
 `report` is the `pdf` row. When it matches, the scraper looks for the first PDF linked in the
 article's own text, ignoring the page's menu and footer and any PDF on another website, which
-is a source the article cites rather than the agency's own report. If it finds one, it adds
+is a source the article cites rather than the agency's own report. The link itself, or the
+three words either side of it, must say `report`, so an amicus brief or a flyer is left off.
+If it finds one, it adds
 `REPORT: <pdf url>` as the last paragraph above `***`, which sends the report to the
 collections queue, and the `report` row then counts as never matched: no `E`, no comment,
 no `TNSmrp`. Other rows still apply. With no PDF in the article, `report` routes as usual.
