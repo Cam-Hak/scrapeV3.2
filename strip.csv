@@ -16,7 +16,7 @@
 5253,,,ila-slideover~cookieb-holder
 6930,,,main-nav
 7925,,,latest
-*,,,cky-modal
+*,,,cky-modal~cky-consent-container
 *,,,evo-press-release__field-evo-issues
 7945,,,visually-hidden
 7947,,,ucsc-press-inquiries-block
@@ -229,3 +229,19 @@
 33725,press@presidentsalliance.org,,
 7861,,– Fresno State Today,
 17479,,,m-wrapper-js-news-article-hero~m-wrapper-js-news-article-list~cmp-wrapper-js-breadcrumb
+37520,"KA MOKU~KE KIA~JOSH GREEN, M.D.~FOR IMMEDIATE RELEASE",Office of the Governor -- News Release,pagetitle
+15123,,| College of the Ozarks,
+13573,,,cmp-link__screen-reader-only
+40574,For media inquiries only,,text-xs-left
+31499,,,ea11y-widget-tools-wrapper
+13562,,,tc-privacy-wrapper
+18415,,,module-cookies-notification
+19980,,,cl-outer
+21719,We want to be transparent about the data~Information Our Partners Collect~We use a number partners,,
+31751,General Inquiries and Comments~20 cents (EUR) per call~Aircraft Noise & Noise Abatement~Medical Inquiries (for passengers and employees)~Deputy Press Officer,,
+27292,contact.press@idemia.com,,
+40824,,,stn-article__right-container~stn-article__subscribe
+4314,,,article-info
+16491,,,coi-banner__wrapper
+7710,,,bg-light
+7243,"Direct from the front-line, the official newspaper of the Royal Navy",,
